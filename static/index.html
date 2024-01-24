@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+    <head>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <link rel="manifest" href="manifest.json" />
+        <script src="/assets/index.js"></script>
+        <!-- <script src="/assets/index.min.js"></script> -->
+        <link rel ="stylesheet" href="/assets/stylesheets/styles.css"/>
+        <style>
+            html {
+                overflow: hidden;
+                overscroll-behavior: none;
+            }
+            body {
+                margin: 0;
+                padding: 0;
+                max-width: 100vw;
+                max-height: 100vh;
+                overflow: hidden;
+                overscroll-behavior: none;
+            }
+            #root {
+                display: flex;
+                flex: 1;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="root"></div>
+    </body>
+</html>
+    <!-- TODO: include ability to run wasm -->
+    <!-- <script>
+    // Polyfill
+    if (!WebAssembly.instantiateStreaming) {
+        WebAssembly.instantiateStreaming = async (resp, importObject) => {
+            const source = await (await resp).arrayBuffer();
+            return await WebAssembly.instantiate(source, importObject);
+        };
+    }
+    
+    const go = new Go();
+    WebAssembly.instantiateStreaming(fetch("static/main.wasm"), go.importObject).then(result => {
+        go.run(result.instance);
+    });
+    </script> -->
+    <!-- TODO: create different default layouts for user to select from in options on connect -->
+    <!-- can include grid layouts, flex etc, ADD TO GO COMPONENTS FILES -->

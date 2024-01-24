@@ -1,0 +1,21 @@
+package fncmp
+
+templ Nil() {
+	<div></div>
+}
+
+templ fC(fc FunComponent) {
+	<div id={ fc.ID } fc={ fc.ListenerStrings() }>
+		@fc
+	</div>
+}
+
+templ LoginForm() {
+	<form name="login-form">
+		<label for="username">Username</label>
+		<input id="username" name="username"/>
+		<label for="password">Password</label>
+		<input id="password" name="password"/>
+		<button text="Login" type="submit">Login</button>
+	</form>
+}
