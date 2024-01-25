@@ -66,7 +66,7 @@ class FunSocketAPI {
         };
     }
 }
-const api = new FunSocketAPI("ws://localhost:8080/funs");
+const api = new FunSocketAPI("ws://localhost:8080/fncmp");
 // todo: make all of these functions private and configure a key to access them
 const funs = {
     _render: (data) => {
@@ -138,32 +138,12 @@ const funs = {
         });
     }),
     render: (e) => __awaiter(this, void 0, void 0, function* () {
-        // make sure this is right
-        const result = yield fetcher(e.action, e.method, e)
-            .then((res) => res.text().then((text) => text))
-            .catch((err) => {
-            return {
-                error: true,
-                message: err,
-            };
-        });
+        // call websocket for render instructions
+        const result = {};
         funs._render({
             id: e.target_id,
             inner: e.inner,
             html: result,
         });
     }),
-};
-// Utility functions
-const fetcher = (url, method, data, headers) => {
-    console.log("base_url: " + base_url);
-    return fetch(base_url || "http://localhost:8080" + url, {
-        method: method,
-        headers: Object.assign(Object.assign({}, headers), { 
-            // "Content-Type": "*",
-            // "Access-Control-Allow-Origin": "*",
-            // "Access-Control-Allow-Headers": "*",
-            Conn: conn_id || "" }),
-        body: JSON.stringify(data),
-    });
 };

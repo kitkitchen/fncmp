@@ -1,13 +1,11 @@
-package fncmp
+package main
 
 templ Nil() {
 	<div></div>
 }
 
-templ fC(fc FunComponent) {
-	<div id={ fc.ID } fc={ fc.ListenerStrings() }>
-		@fc
-	</div>
+script Test() {
+	console.log("Hello, world!")
 }
 
 templ LoginForm() {

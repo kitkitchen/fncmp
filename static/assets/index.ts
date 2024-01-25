@@ -96,7 +96,8 @@ class FunSocketAPI {
         };
     }
 }
-const api = new FunSocketAPI("ws://localhost:8080/funs");
+
+const api = new FunSocketAPI("ws://localhost:8080/fncmp");
 
 // todo: make all of these functions private and configure a key to access them
 const funs = {
@@ -175,34 +176,12 @@ const funs = {
         });
     },
     render: async (e: RenderTargetRequest) => {
-        // make sure this is right
-        const result = await fetcher(e.action, e.method, e)
-            .then((res) => res.text().then((text) => text))
-            .catch((err) => {
-                return {
-                    error: true,
-                    message: err,
-                };
-            });
+        // call websocket for render instructions
+        const result = {}
         funs._render({
             id: e.target_id,
             inner: e.inner,
             html: result as string,
         });
     },
-};
-// Utility functions
-const fetcher = (url: string, method: string, data: Object, headers?: {}) => {
-    console.log("base_url: " + base_url)
-    return fetch(base_url || "http://localhost:8080" + url, {
-        method: method,
-        headers: {
-            ...headers,
-            // "Content-Type": "*",
-            // "Access-Control-Allow-Origin": "*",
-            // "Access-Control-Allow-Headers": "*",
-            Conn: conn_id || "",
-        },
-        body: JSON.stringify(data),
-    });
 };

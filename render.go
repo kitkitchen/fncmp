@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"errors"
@@ -54,46 +54,3 @@ func InnerHTML[Data any]() Opt[RenderTargetRequest[Data]] {
 		r.Inner = true
 	}
 }
-
-// Everything below is work in progress pending implementing the Render interface for
-// use with package html.Template
-
-type funRenderer struct {
-	html string
-	fc   *FunComponent
-}
-
-var listeners = []EventListener{}
-
-func NewFunRenderer(fc *FunComponent) *funRenderer {
-	listeners = append(listeners, fc.EventListeners...)
-	return &funRenderer{
-		fc: fc,
-	}
-}
-func (r *funRenderer) Write(p []byte) (n int, err error) {
-	r.html = string(p)
-	return len(p), nil
-}
-
-// TODO: can we use this to render the component with custom attributes added instead of wrapping children?
-// func (r *funRenderer) Render(ctx context.Context, w io.Writer) error {
-
-// 	// render html from component using funRenderer.Write
-// 	r.fc.Component.Render(ctx, r)
-
-// 	// // compose request structure
-// 	// fr := NewFunRequest("render", ComponentRequest{
-// 	// 	ID:        "root",
-// 	// 	Component: r.html,
-// 	// 	Events:    listeners,
-// 	// })
-
-// 	b, err := json.Marshal(r.html)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	w.Write(b)
-
-// 	return nil
-// }

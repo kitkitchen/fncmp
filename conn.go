@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"encoding/json"
@@ -51,7 +51,11 @@ type (
 func NewConn(w http.ResponseWriter, r *http.Request) (*Conn, error) {
 	connPool.mu.Lock()
 	defer connPool.mu.Unlock()
-	upgrader := websocket.Upgrader{}
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		}, // allow all connections
+	}
 	websocket, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return nil, errors.New("failed to upgrade connection")

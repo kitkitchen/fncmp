@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"context"
@@ -6,89 +6,120 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/a-h/templ"
-	"github.com/google/uuid"
+	"github.com/kitkitchen/mnemo"
 )
+
+const componentStore mnemo.StoreKey = "fn_component_cache_store"
+
+func init() {
+	_, err := mnemo.NewStore(componentStore)
+	if err != nil {
+		panic(err)
+	}
+}
 
 type Component interface {
 	Render(ctx context.Context, w io.Writer) error
 }
 
-type FunComponent struct {
-	// TOODO: THIS NEEDS TO BE IMPLEMENTED PROPERLY
+type FnComponent[Cache any] struct {
 	ID string
-	Component
-	// templ.Component
-	w              http.ResponseWriter
-	r              *http.Request
-	scripts        []templ.ComponentScript
+	FnRenderer
 	EventListeners []EventListener
 	elIds          []string
+	cacheKey       mnemo.CacheKey
+	cache          *mnemo.Cache[Cache]
 }
 
-func NewFC(f func(w http.ResponseWriter, r *http.Request) Component, opts ...Opt[FunComponent]) FunComponent {
-	fc := FunComponent{
-		scripts:        []templ.ComponentScript{},
+type Listener struct {
+	Action string `json:"action"`
+}
+
+//TODO: Make a decoder that can parse custom html tags
+
+var test = func(w io.Writer, r io.ReadCloser) Component {
+
+	return nil
+}
+
+type FnRenderer struct {
+	html []byte
+	context.Context
+}
+
+func (f FnRenderer) Render(ctx context.Context, w io.Writer) error {
+	f.Context = ctx
+	_, err := w.Write(f.html)
+	return err
+}
+func (f FnRenderer) Write(p []byte) (n int, err error) {
+	n, err = f.Read(p)
+	return n, err
+}
+
+func (f FnRenderer) Read(p []byte) (n int, err error) {
+	f.html = append(f.html, p...)
+	return len(p), nil
+}
+
+func (f FnRenderer) Close() error {
+	return nil
+}
+
+var x = func(w http.ResponseWriter, r *http.Request) {
+	// f := templ.ComponentScript{}.Function
+	// y := New(test).Render(context.Background(), w)
+}
+
+// TODO: !!! Event listener should be added to the component html during the render process and not here
+func New[Cache any](f func(w io.Writer, r io.ReadCloser) Component) *FnComponent[Cache] {
+	fc := FnComponent[Cache]{
+		FnRenderer: FnRenderer{
+			html:    []byte{},
+			Context: context.Background(),
+		},
 		EventListeners: []EventListener{},
-	}
-	if f == nil {
-		fc.Component = Nil()
-		return fc
+		elIds:          []string{},
 	}
 
-	for _, opt := range opts {
-		opt(&fc)
-	}
-	for _, script := range fc.scripts {
-		fmt.Println(script)
-	}
-	if fc.ID == "" {
-		fc.ID = uuid.New().String()
-	}
-	for _, el := range fc.EventListeners {
-		fc.elIds = append(fc.elIds, el.ID)
-	}
+	// Create a cache for the component
+	fc.cacheKey = mnemo.CacheKey(fc.ID)
+	cache, _ := mnemo.NewCache[Cache](componentStore, fc.cacheKey)
+	cache.SetReducer(cache.DefaultReducer)
 
-	userComponent := f(fc.w, fc.r)
-	if userComponent != nil {
-		fc.Component = userComponent
-	} else {
-		fc.Component = Nil()
-	}
-	fc.Component = fC(fc)
-	return fc
+	fmt.Println(cache)
+
+	// Read the component html into the FnRenderer
+	// and wrap it in a div with the component ID
+
+	//TODO: !!! Event listeners should be added to the component html
+	// during the render process and not here
+	// Add it to the javascript file instead
+	fc.Read([]byte(fmt.Sprint(
+		`<div id="` + fc.ID + `">`,
+	)))
+	component := f(fc, fc)
+	component.Render(fc.Context, fc)
+	fc.Read([]byte("</div>"))
+
+	return &fc
 }
 
-// WithID sets the ID of the component which default to a randomly generated UUID string
-func WithID(id string) Opt[FunComponent] {
-	return func(c *FunComponent) {
-		c.ID = id
+// WithEventListeners sets variadic event listeners to a FnComponent
+func (f *FnComponent[any]) WithEventListeners(e ...EventListener) *FnComponent[any] {
+	for _, el := range e {
+		f.elIds = append(f.elIds, el.ID)
 	}
+	return f
 }
 
-// WithEventListeners sets variadic event listeners to a FunComponent
-func WithEventListeners(e ...EventListener) Opt[FunComponent] {
-	return func(c *FunComponent) {
-		c.EventListeners = e
-	}
-}
-
-func WithScripts(s ...templ.ComponentScript) Opt[FunComponent] {
-	return func(c *FunComponent) {
-		c.scripts = s
-	}
-}
-
-func WithHandler(w http.ResponseWriter, r *http.Request) Opt[FunComponent] {
-	return func(fc *FunComponent) {
-		fc.r = r
-		fc.w = w
-	}
-}
-
-func (fc FunComponent) ListenerStrings() (s string) {
+func (fc FnComponent[any]) ListenerStrings() (s string) {
 	for _, el := range fc.EventListeners {
 		s += el.String()
 	}
 	return s
+}
+
+func (fc *FnComponent[any]) Cache() *mnemo.Cache[any /* type parameter */] {
+	return fc.cache
 }
