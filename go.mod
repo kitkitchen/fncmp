@@ -1,4 +1,4 @@
-module github.com/kitkitchen/fcmp
+module github.com/kitkitchen/fncmp
 
 go 1.21.5
 

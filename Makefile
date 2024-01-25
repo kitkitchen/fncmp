@@ -15,4 +15,4 @@ publish:
 	GOPROXY=proxy.golang.org go list -m github.com/kitkitchen/fcmp@v0.0.1
 
 lookup:
-	curl https://sum.golang.org/lookup/github.com/kitkitchen/fncmp@v0.0.1
+	curl https://sum.golang.org/lookup/github.com/kitkitchen/fncmp@v0.0.2
