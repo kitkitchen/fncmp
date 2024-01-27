@@ -1,4 +1,5 @@
 let functions: Functions;
+let _funs: Functions;
 let conn_id: string | undefined = undefined;
 let base_url: string | undefined = undefined;
 let verbose = false;
@@ -7,7 +8,7 @@ type Functions = {
     [key: string]: (data: any) => any;
 };
 
-type FunRequest<T> = {
+type FnRequest<T> = {
     function: string;
     data: T;
 };
@@ -24,16 +25,24 @@ type EventRequest = {
     data: Object;
 };
 
-type RenderTargetRequest = {
+type Dispatch = {
+    function: "render" | "redirect" | "event" | "error" | "_connect";
     conn_id: string;
     target_id: string;
     inner: boolean;
     action: string;
     method: string;
-    data: Object;
+    event: {
+        on: string;
+        action: string;
+        method: string;
+        id: string;
+    };
+    data: string;
+    message: string;
 };
 
-class FunSocketAPI {
+class FnSocketAPI {
     private ws: WebSocket | null = null;
     private addr: string | undefined = undefined;
 
@@ -45,6 +54,7 @@ class FunSocketAPI {
             throw new Error("ws: no address provided...");
         }
         this.addr = addr;
+        _funs = this.funs;
         this.connect(addr);
     }
 
@@ -61,127 +71,120 @@ class FunSocketAPI {
         };
 
         this.ws.onmessage = function (event) {
-            const fr = JSON.parse(event.data) as FunRequest<any>;
-            if (!fr) {
+            let d = JSON.parse(event.data) as Dispatch;
+            console.log(d);
+            if (!d) {
                 throw new Error("ws: no data received in request...");
             }
-            // Initialize connection with fc_config.json
-            if (fr.function == "_connect") {
+            if (d.function == "_connect") {
+                // Reject multiple connections
                 if (conn_id) {
                     return;
                 }
-                const conn = fr as FunRequest<{
-                    conn_id: string;
-                    base_url: string;
-                    verbose: boolean;
-                }>;
-                conn_id = conn.data.conn_id;
-                base_url = conn.data.base_url;
-                verbose = conn.data.verbose;
-                this.send(
-                    JSON.stringify({
-                        error: false,
-                        message: "connected",
-                    })
-                );
-                return;
+                // Initialize connection
+                conn_id = d.conn_id;
+            } else {
+                if (!d.function) {
+                    console.log("ws: error no function provided in request...");
+                    return;
+                }
+                // Parse function execution
+                _funs[d.function](d);
             }
-            if (!conn_id) {
-                return;
-            }
-            // Parse function execution
-            const func = funs[fr.function];
-            const res = func(fr.data);
-            this.send(JSON.stringify(res));
         };
     }
-}
 
-const api = new FunSocketAPI("ws://localhost:8080/fncmp");
-
-// todo: make all of these functions private and configure a key to access them
-const funs = {
-    _render: (data: { id: string; inner: boolean, html: string }) => {
-        const elem = document.getElementById(data.id);
-        if (!elem) {
-            return {
-                error: true,
-                message: "element not found: " + data,
-            };
-        }
-            elem.innerHTML = data.html;
-        // if (data.inner) {
-        //     elem.innerHTML = data.html;
-        // } else {
-        //     elem.outerHTML = data.html;
-        // }
-        console.log(data.html)
-        const fcs = elem.querySelectorAll("[fc]");
-        fcs.forEach((elem: Element) => {
+    funs: Functions = {
+        _render: (data: { id: string; inner: boolean; html: string }) => {
+            const elem = document.getElementById(data.id);
             if (!elem) {
-                return;
-            }
-            const _fc = elem.getAttribute("fc");
-            // Parse attribute
-            const fc = JSON.parse(_fc) as {
-                on: string;
-                action: string;
-                method: string;
-                id: string;
-            };
-            elem.addEventListener(fc.on, (ev) => {
-                ev.preventDefault();
-                console.log("event: " + fc.on)
-                let data: any;
-                if (fc.on == "submit") {
-                    const form = ev.target as HTMLFormElement;
-                    const formData = new FormData(form);
-                    data = Object.fromEntries(formData.entries());
-                }
-                // Send event to server
-                funs.event({
-                    conn_id: conn_id,
-                    target_id: elem.id,
-                    event: fc,
-                    data: data,
-                });
-            });
-        });
-
-        return {
-            error: false,
-            message: "success",
-        };
-    },
-    event: async (e: EventRequest) => {
-        let headers: {} = {};
-        console.log("event: " + e.toString());
-        const result = await fetcher(e.event.action, e.event.method, e)
-            // This parses html from socket message
-            .then((res) => {
-                headers = res.headers;
-                return res.text()
-            })
-            .then((text) => text)
-            .catch((err) => {
                 return {
                     error: true,
-                    message: err,
+                    message: "element not found: " + data,
                 };
+            }
+
+            elem.innerHTML = data.html;
+            // if (data.inner) {
+            //     elem.innerHTML = data.html;
+            // } else {
+            //     elem.outerHTML = data.html;
+            // }
+            console.log(data.html);
+            const elems = elem.querySelectorAll("[fc]");
+            console.log(elems);
+            elems.forEach((elem: Element) => {
+                console.log("ELEM");
+                console.log(elem);
+                if (!elem) {
+                    return;
+                }
+                const _fc = elem.getAttribute("fc");
+                console.log("_FC ATTRIBUTE");
+                console.log(_fc);
+                const array = JSON.parse(_fc);
+                // Parse attributes
+                array.forEach((thisFc: any) => {
+                    const fc = thisFc as {
+                        on: string;
+                        action: string;
+                        method: "POST";
+                        id: string;
+                    };
+                    elem.addEventListener(fc.on, (ev) => {
+                        ev.preventDefault();
+                        console.log("event: " + fc.on);
+                        let data: any;
+                        if (fc.on == "submit") {
+                            const form = ev.target as HTMLFormElement;
+                            const formData = new FormData(form);
+                            data = Object.fromEntries(formData.entries());
+                            console.log(data)
+                        }
+
+                        let req: Dispatch = {
+                            function: "event",
+                            conn_id: conn_id,
+                            target_id: elem.id,
+                            inner: false,
+                            action: fc.action,
+                            method: fc.method,
+                            event: fc,
+                            data: JSON.stringify(data),
+                            message: "event dispatched",
+                        };
+                        console.log(req)
+                        // Send event to server
+                        this.ws.send(JSON.stringify(req));
+                    });
+                });
             });
-        funs._render({
-            id: e.target_id,
-            inner: false,
-            html: result.toString(),
-        });
-    },
-    render: async (e: RenderTargetRequest) => {
-        // call websocket for render instructions
-        const result = {}
-        funs._render({
-            id: e.target_id,
-            inner: e.inner,
-            html: result as string,
-        });
-    },
-};
+        },
+        redirect: (e: Dispatch) => {
+            let req: Dispatch = {
+                function: "redirect",
+                conn_id: conn_id,
+                target_id: e.target_id,
+                inner: false,
+                action: e.action,
+                method: e.method,
+                event: e.event,
+                data: e.data,
+                message: e.message,
+            };
+            // Send event to server
+            this.ws.send(JSON.stringify(req));
+        },
+        render: (e: Dispatch) => {
+            console.log(e);
+            // call websocket for render instructions
+            this.funs._render({
+                id: e.target_id,
+                inner: e.inner,
+                html: e.data as string,
+            });
+        },
+    };
+}
+
+const api = new FnSocketAPI("ws://localhost%s/%s/%s");

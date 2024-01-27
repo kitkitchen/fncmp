@@ -2,25 +2,31 @@ package main
 
 import (
 	"encoding/json"
-	"net/http"
 	"sync"
 
 	"github.com/google/uuid"
 )
 
 var evtHandlers = &eventHandlers{
-	ef: make(map[string]http.HandlerFunc),
+	ef: make(map[string]func(d *Dispatch) Component),
 }
 
 type eventHandlers struct {
 	mu sync.Mutex
-	ef map[string]http.HandlerFunc
+	ef map[string]func(d *Dispatch) Component
 }
 
-func (e *eventHandlers) add(id string, h http.HandlerFunc) {
+func (e *eventHandlers) add(id string, f func(d *Dispatch) Component) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.ef[id] = h
+	e.ef[id] = f
+}
+
+func (e *eventHandlers) get(id string) (func(d *Dispatch) Component, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	f, ok := e.ef[id]
+	return f, ok
 }
 
 type OnEvent string
@@ -116,9 +122,9 @@ type EventListener struct {
 	Method string  `json:"method"`
 }
 
-func NewEventListener(on OnEvent, h http.HandlerFunc, o ...Opt[EventListener]) (action string, el EventListener) {
+func NewEventListener(on OnEvent, f func(d *Dispatch) Component, o ...Opt[EventListener]) EventListener {
 	id := uuid.New().String()
-	el = EventListener{
+	el := EventListener{
 		ID: id,
 		On: on,
 	}
@@ -126,9 +132,9 @@ func NewEventListener(on OnEvent, h http.HandlerFunc, o ...Opt[EventListener]) (
 		opt(&el)
 	}
 
-	evtHandlers.add(id, h)
+	evtHandlers.add(id, f)
 	evtListeners.Add(id, el)
-	return el.Action, el
+	return el
 }
 
 func WithAction(action string) Opt[EventListener] {

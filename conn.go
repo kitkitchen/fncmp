@@ -5,18 +5,14 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
 var connPool = conns{
 	pool: make(map[string]*Conn),
-}
-
-func UseConnPool() *conns {
-	return &connPool
 }
 
 func (c *conns) Get(id string) (*Conn, bool) {
@@ -48,13 +44,15 @@ type (
 
 // NewConn upgrades an http connection to a websocket connection and returns a Conn
 // or an error if the upgrade fails.
-func NewConn(w http.ResponseWriter, r *http.Request) (*Conn, error) {
+func NewConn(w http.ResponseWriter, r *http.Request, ID string) (*Conn, error) {
 	connPool.mu.Lock()
 	defer connPool.mu.Unlock()
+
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
-			return true
-		}, // allow all connections
+			host := strings.Split(r.Host, ":")[0]
+			return host == "localhost"
+		},
 	}
 	websocket, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -63,10 +61,10 @@ func NewConn(w http.ResponseWriter, r *http.Request) (*Conn, error) {
 
 	c := &Conn{
 		websocket: websocket,
-		ID:        uuid.New().String(),
+		ID:        ID,
 		Messages:  make(chan []byte, 16),
 	}
-	connPool.pool[c.ID] = c
+	connPool.pool[ID] = c
 	return c, nil
 }
 
@@ -76,6 +74,9 @@ func (c *Conn) close() error {
 	if c == nil {
 		return errors.New("cannot close nil connection")
 	}
+	connPool.mu.Lock()
+	defer connPool.mu.Unlock()
+	delete(connPool.pool, c.ID)
 	c.websocket.Close()
 	return nil
 }
@@ -83,6 +84,7 @@ func (c *Conn) close() error {
 // Listen listens for messages on the Conn's Messages channel and writes them to the websocket connection.
 func (c *Conn) listen() {
 	go func(c *Conn) {
+		defer c.close()
 		for {
 			_, message, err := c.websocket.ReadMessage()
 			if err != nil {
@@ -97,7 +99,18 @@ func (c *Conn) listen() {
 				close(c.Messages)
 				break
 			}
-			log.Printf("received: %s", message)
+			d := Dispatch{}
+			// marshall the message into a Dispatch
+			err = json.Unmarshal(message, &d)
+			if err != nil {
+				log.Printf("error: %v", err)
+				continue
+			}
+			if dispatcher != nil {
+				dispatcher.Dispatch(&d)
+				continue
+			}
+			log.Println("fncmp: no dispatcher registered")
 		}
 	}(c)
 

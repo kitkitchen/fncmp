@@ -2,41 +2,19 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
 )
+
+// Should this be DispatchType?
 
 type FunctionName string
 
 const (
-	Render FunctionName = "render"
+	Render   FunctionName = "render"
+	Redirect FunctionName = "redirect"
+	Event    FunctionName = "event"
+	Error    FunctionName = "error"
 )
-
-type FunRequest[T any] struct {
-	Function FunctionName `json:"function"`
-	Data     T            `json:"data"`
-}
-
-func NewFunRequest[T any](f FunctionName, data T) FunRequest[T] {
-	return FunRequest[T]{
-		Function: f,
-		Data:     data,
-	}
-}
-
-func (fr FunRequest[any]) Marshal() []byte {
-	b, err := json.Marshal(fr)
-	if err != nil {
-		log.Println(err)
-	}
-	return b
-}
-
-func (fr FunRequest[any]) Send(conn *Conn) {
-	fmt.Println(fr.Marshal())
-	conn.Publish(fr.Marshal())
-}
 
 // Specialized requests
 

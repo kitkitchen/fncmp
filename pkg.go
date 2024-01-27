@@ -1,37 +1,39 @@
 package main
 
-import (
-	"log"
-	"net/http"
-)
-
 type (
 	Opt[T any] func(t *T)
 )
 
-// Websocket connection	handler for handling FunComponents
-func HandleFuns(w http.ResponseWriter, r *http.Request) {
-	// upgrade to websocket
-	conn, err := NewConn(w, r)
-	if err != nil {
-		return
-	}
+var dispatcher Dispatcher
 
-	cfg := ConnectionInfo{}
-	cfg.ConnID = conn.ID
-
-	fr := NewFunRequest("_connect", cfg)
-	fr.Send(conn)
-
-	log.Print("new connection: ", conn.ID)
-
-	render := NewFunRequest(Render, RenderTargetRequest[ConnectionInfo]{
-		ConnID:   conn.ID,
-		TargetID: "root",
-		Action:   "/main",
-		Method:   "POST",
-		Data:     cfg,
-	})
-	render.Send(conn)
-	conn.listen()
+type Dispatcher interface {
+	Dispatch(d *Dispatch)
 }
+
+func RegisterDispatcher(d Dispatcher) {
+	dispatcher = d
+}
+
+// // Websocket connection	handler for handling FunComponents
+// func HandleFncmp(w http.ResponseWriter, r *http.Request) {
+// 	// upgrade to websocket
+// 	conn, err := NewConn(w, r)
+// 	if err != nil {
+// 		return
+// 	}
+
+// 	log.Print("new connection: ", conn.ID)
+
+// 	main := Dispatch[string]{
+// 		Function: "_connect",
+// 		TargetID: "root",
+// 		ConnID:   conn.ID,
+// 	}
+// 	b, err := main.Marshall()
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	conn.Publish(b)
+// 	conn.listen()
+// }
