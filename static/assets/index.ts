@@ -64,10 +64,22 @@ class FnSocketAPI {
         } catch {
             throw new Error("ws: failed to connect to server...");
         }
+
+        const retry = () => {
+            setTimeout(() => {
+                if (this.ws.CLOSED) {
+                    location.reload();
+                    retry();
+                }
+            }, 1000);
+        };
+
         this.ws.onopen = function () {};
-        this.ws.onclose = function () {};
+        this.ws.onclose = function () {
+            retry();
+        };
         this.ws.onerror = function (e) {
-            throw new Error("ws: " + e);
+            retry();
         };
 
         this.ws.onmessage = function (event) {
@@ -139,7 +151,7 @@ class FnSocketAPI {
                             const form = ev.target as HTMLFormElement;
                             const formData = new FormData(form);
                             data = Object.fromEntries(formData.entries());
-                            console.log(data)
+                            console.log(data);
                         }
 
                         let req: Dispatch = {
@@ -153,7 +165,7 @@ class FnSocketAPI {
                             data: JSON.stringify(data),
                             message: "event dispatched",
                         };
-                        console.log(req)
+                        console.log(req);
                         // Send event to server
                         this.ws.send(JSON.stringify(req));
                     });

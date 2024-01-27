@@ -108,10 +108,20 @@ class FnSocketAPI {
         catch (_a) {
             throw new Error("ws: failed to connect to server...");
         }
+        const retry = () => {
+            setTimeout(() => {
+                if (this.ws.CLOSED) {
+                    location.reload();
+                    retry();
+                }
+            }, 1000);
+        };
         this.ws.onopen = function () { };
-        this.ws.onclose = function () { };
+        this.ws.onclose = function () {
+            retry();
+        };
         this.ws.onerror = function (e) {
-            throw new Error("ws: " + e);
+            retry();
         };
         this.ws.onmessage = function (event) {
             let d = JSON.parse(event.data);
