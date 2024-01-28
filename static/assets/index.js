@@ -8,61 +8,55 @@ class FnSocketAPI {
         this.ws = null;
         this.addr = undefined;
         this.funs = {
-            _render: (data) => {
-                const elem = document.getElementById(data.id);
+            _render: (dispatch) => {
+                // Parse event listeners
+                const elem = document.getElementById(dispatch.target_id);
                 if (!elem) {
-                    return {
-                        error: true,
-                        message: "element not found: " + data,
-                    };
+                    dispatch.function = "error";
+                    dispatch.message = "element not found: " + dispatch.target_id;
+                    this.ws.send(JSON.stringify(dispatch));
                 }
-                elem.innerHTML = data.html;
-                // if (data.inner) {
-                //     elem.innerHTML = data.html;
-                // } else {
-                //     elem.outerHTML = data.html;
-                // }
-                console.log(data.html);
-                const elems = elem.querySelectorAll("[fc]");
-                console.log(elems);
-                elems.forEach((elem) => {
-                    console.log("ELEM");
-                    console.log(elem);
+                if (dispatch.inner) {
+                    elem.innerHTML = dispatch.data;
+                }
+                else {
+                    elem.outerHTML = dispatch.data;
+                }
+                console.log("ELEMENT:");
+                console.log(elem);
+                console.log("HTML:");
+                console.log(dispatch.data);
+                dispatch.event_listeners.forEach((fc) => {
+                    const elem = document.getElementById(fc.fn_id);
                     if (!elem) {
                         return;
                     }
-                    const _fc = elem.getAttribute("fc");
-                    console.log("_FC ATTRIBUTE");
-                    console.log(_fc);
-                    const array = JSON.parse(_fc);
-                    // Parse attributes
-                    array.forEach((thisFc) => {
-                        const fc = thisFc;
-                        elem.addEventListener(fc.on, (ev) => {
-                            ev.preventDefault();
-                            console.log("event: " + fc.on);
-                            let data;
-                            if (fc.on == "submit") {
-                                const form = ev.target;
-                                const formData = new FormData(form);
-                                data = Object.fromEntries(formData.entries());
-                                console.log(data);
-                            }
-                            let req = {
-                                function: "event",
-                                conn_id: conn_id,
-                                target_id: elem.id,
-                                inner: false,
-                                action: fc.action,
-                                method: fc.method,
-                                event: fc,
-                                data: JSON.stringify(data),
-                                message: "event dispatched",
-                            };
-                            console.log(req);
-                            // Send event to server
-                            this.ws.send(JSON.stringify(req));
-                        });
+                    elem.addEventListener(fc.on, (ev) => {
+                        ev.preventDefault();
+                        console.log("event: " + fc.on);
+                        let data;
+                        if (fc.on == "submit") {
+                            const form = ev.target;
+                            const formData = new FormData(form);
+                            data = Object.fromEntries(formData.entries());
+                            console.log(data);
+                        }
+                        let event = {
+                            function: "event",
+                            conn_id: conn_id,
+                            target_id: fc.fn_id,
+                            inner: false,
+                            action: fc.action,
+                            method: fc.method,
+                            event: fc,
+                            event_listeners: [],
+                            data: JSON.stringify(elem),
+                            message: "event dispatched",
+                        };
+                        console.log("EVENT:");
+                        console.log(event);
+                        // Send event to server
+                        this.ws.send(JSON.stringify(event));
                     });
                 });
             },
@@ -71,24 +65,21 @@ class FnSocketAPI {
                     function: "redirect",
                     conn_id: conn_id,
                     target_id: e.target_id,
-                    inner: false,
+                    inner: e.inner,
                     action: e.action,
                     method: e.method,
                     event: e.event,
                     data: e.data,
+                    event_listeners: e.event_listeners,
                     message: e.message,
                 };
                 // Send event to server
                 this.ws.send(JSON.stringify(req));
             },
-            render: (e) => {
-                console.log(e);
+            render: (data) => {
+                console.log(data);
                 // call websocket for render instructions
-                this.funs._render({
-                    id: e.target_id,
-                    inner: e.inner,
-                    html: e.data,
-                });
+                this.funs._render(data);
             },
         };
         if (this.addr) {

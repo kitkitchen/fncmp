@@ -100,17 +100,16 @@ func (c *Conn) listen() {
 				break
 			}
 			d := Dispatch{}
-			// marshall the message into a Dispatch
 			err = json.Unmarshal(message, &d)
 			if err != nil {
 				log.Printf("error: %v", err)
 				continue
 			}
 			if dispatcher != nil {
-				dispatcher.Dispatch(&d)
+				dispatcher.Dispatch(d)
 				continue
 			}
-			log.Println("fncmp: no dispatcher registered")
+			log.Println("fncmp: ERROR no dispatcher registered")
 		}
 	}(c)
 

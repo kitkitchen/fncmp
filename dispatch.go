@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"log"
@@ -9,29 +10,38 @@ import (
 // For passing to render interface
 type ContextWithDispatch struct {
 	context.Context
-	*Dispatch
+	Dispatch
 }
-
-// TODO: Function component creates a new dispatch, it then reads the html from the component render function
-// and wraps it in a div with the component ID. It then sends the dispatch to the client.
 
 // TODO:
 type Dispatch struct {
-	Function FunctionName `json:"function"`
+	context.Context `json:"-"`
+	Function        FunctionName `json:"function"`
 	// todo: mask connID
-	ConnID   string `json:"conn_id"`
-	TargetID string `json:"target_id"`
-	Inner    bool   `json:"inner"`
-	Action   string `json:"action"`
-	Method   string `json:"method"`
-	Event    struct {
-		On     string `json:"on"`
-		Action string `json:"action"`
-		Method string `json:"method"`
-		ID     string `json:"id"`
-	} `json:"event"`
-	Data    string `json:"data"`
-	Message string `json:"message"`
+	ConnID         string          `json:"conn_id"`
+	TargetID       string          `json:"target_id"`
+	Inner          bool            `json:"inner"`
+	Action         string          `json:"action"`
+	Method         string          `json:"method"`
+	Event          EventListener   `json:"event"`
+	Data           string          `json:"data"`
+	EventListeners []EventListener `json:"event_listeners"`
+	Message        string          `json:"message"`
+}
+
+func (d *Dispatch) WithContext(ctx context.Context) *Dispatch {
+	d.Context = ctx
+	return d
+}
+
+func (d *Dispatch) WithFunction(f FunctionName) *Dispatch {
+	d.Function = f
+	return d
+}
+
+func (d *Dispatch) WithEventListeners(el ...EventListener) *Dispatch {
+	d.EventListeners = append(d.EventListeners, el...)
+	return d
 }
 
 func (d Dispatch) IsRender() bool {
@@ -50,10 +60,42 @@ func (d Dispatch) IsError() bool {
 	return d.Function == Error
 }
 
-func (d *Dispatch) send() {
+func (d *Dispatch) AppendComponent(c Component) *Dispatch {
+	buf := new(bytes.Buffer)
+	c.Render(ContextWithDispatch{
+		Context:  context.Background(),
+		Dispatch: *d,
+	}, buf)
+	d.Data = buf.String()
+	return d
+}
+
+func (d *Dispatch) AppendHTML(html string) *Dispatch {
+	d.Data += html
+	return d
+}
+
+func (d *Dispatch) SwapComponent(c Component) *Dispatch {
+	buf := new(bytes.Buffer)
+	c.Render(d.Context, buf)
+	d.Data = buf.String()
+	return d
+}
+
+func (d *Dispatch) InnerHTML() *Dispatch {
+	d.Inner = true
+	return d
+}
+
+func (d *Dispatch) Target(id string) *Dispatch {
+	d.TargetID = id
+	return d
+}
+
+func (d Dispatch) send() {
 	conn, ok := connPool.Get(d.ConnID)
 	if !ok {
-		panic("fncmp: error retrieving connection to DOM: " + d.ConnID)
+		log.Println("fncmp: ERROR retrieving connection to client: " + d.ConnID)
 	}
 	b, err := json.Marshal(d)
 	if err != nil {
@@ -62,7 +104,7 @@ func (d *Dispatch) send() {
 	conn.Publish(b)
 }
 
-func (d *Dispatch) Marshall() ([]byte, error) {
+func (d Dispatch) Marshal() ([]byte, error) {
 	b, err := json.Marshal(d)
 	if err != nil {
 		return nil, err

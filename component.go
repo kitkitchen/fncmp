@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -29,83 +30,56 @@ type Component interface {
 }
 
 type FnComponent struct {
-	ID string
-	Renderer
-	htmlCache *mnemo.Cache[string]
-}
-
-type FnComponentState struct {
-	ID             string          `json:"id"`
-	Html           string          `json:"html"`
-	EventListeners []EventListener `json:"event_listeners"`
-}
-
-type Listener struct {
-	Action string `json:"action"`
+	ID    string
+	Label string
+	FnRenderer
 }
 
 //TODO: Make a decoder that can parse custom html tags
 
-type Renderer struct {
-	component      func(d *Dispatch) Component
-	html           string
-	EventListeners []EventListener
-	fcID           string
-	elIds          []string
-	context.Context
+type FnRenderer struct {
+	FnID      string
+	component func(d Dispatch) Dispatch
 }
 
-func (r *Renderer) Render(ctx context.Context, w io.Writer) error {
+func (r FnRenderer) Render(ctx context.Context, w io.Writer) error {
 	dctx, ok := ctx.(ContextWithDispatch)
 	if !ok {
 		panic("fncmp: error casting context to ContextWithDispatch")
 	}
+	dispatch := r.component(dctx.Dispatch)
+	if dispatch.EventListeners != nil {
+		b, err := json.Marshal(dispatch.EventListeners)
+		if err != nil {
+			return err
+		}
+		dispatch.Data = "<div id='" + r.FnID + "' fnc=" + string(b) + ">" + dispatch.Data + "</div>"
+	} else {
+		dispatch.Data = "<div id='" + r.FnID + "'>" + dispatch.Data + "</div>"
+	}
+	_, err := w.Write([]byte(dispatch.Data))
+	return err
 	// Read the component html into the FnRenderer
 	// and wrap it in a div with the component ID
 	//TODO: Does this need to be an array in string format?
-	els := ""
-	for k, el := range r.EventListeners {
-		els += el.String()
-		if k != len(r.EventListeners)-1 {
-			els += ","
-		}
-	}
-	r.Read([]byte(fmt.Sprint(
-		`<div id="` + r.fcID + `" ` + `fc=[` + els + `]>`,
-	)))
-
-	component := r.component(dctx.Dispatch)
-	component.Render(dctx, r)
-	r.Read([]byte("</div>"))
-	_, err := w.Write([]byte(r.html))
-
-	return err
-}
-func (r *Renderer) Write(p []byte) (n int, err error) {
-	n, err = r.Read(p)
-	return n, err
+	// TODO: Add event listeners to dispatch as it's being passed
+	// then process all at once without using fc tags
+	// els := ""
+	// for k, el := range r.EventListeners {
+	// 	els += el.String()
+	// 	if k != len(r.EventListeners)-1 {
+	// 		els += ","
+	// 	}
+	// }
 }
 
-func (r *Renderer) Read(p []byte) (n int, err error) {
-	r.html = r.html + string(p)
-	return len(p), nil
-}
-
-func (r Renderer) Close() error {
-	return nil
-}
-
-func NewFnComponent(f func(d *Dispatch) Component) FnComponent {
+func NewFnComponent(f func(d Dispatch) Dispatch) FnComponent {
 	ID := uuid.New().String()
 	fc := FnComponent{
 		ID: ID,
-		Renderer: Renderer{
-			component:      f,
-			fcID:           ID,
-			html:           "",
-			EventListeners: []EventListener{},
-			elIds:          []string{},
-			Context:        context.Background(),
+		FnRenderer: FnRenderer{
+			FnID:      ID,
+			component: f,
 		},
 	}
 
@@ -119,11 +93,7 @@ func NewFnComponent(f func(d *Dispatch) Component) FnComponent {
 		panic(err)
 	}
 	fnCache.SetReducer(func(state FnComponent) (mutation any) {
-		return FnComponentState{
-			ID:             state.ID,
-			Html:           state.Renderer.html,
-			EventListeners: state.Renderer.EventListeners,
-		}
+		return state
 	})
 	fnCache.Cache(key, &fc)
 
@@ -132,31 +102,9 @@ func NewFnComponent(f func(d *Dispatch) Component) FnComponent {
 	return fc
 }
 
-func (f *FnComponent) WithContext(ctx context.Context) *FnComponent {
-	f.Context = ctx
-	return f
-}
-
 func (f *FnComponent) WithID(id string) *FnComponent {
 	f.ID = id
 	return f
-}
-
-// WithEventListeners sets variadic event listeners to a FnComponent
-func (f *FnComponent) WithEventListeners(e ...EventListener) *FnComponent {
-	f.EventListeners = append(f.EventListeners, e...)
-	return f
-}
-
-func (fc FnComponent) ListenerStrings() (s string) {
-	for _, el := range fc.EventListeners {
-		s += el.String()
-	}
-	return s
-}
-
-func (fc *FnComponent) HtmlCache() *mnemo.Cache[string] {
-	return fc.htmlCache
 }
 
 func WithFnCache[T any](f *FnComponent) (*mnemo.Cache[T], error) {
@@ -169,12 +117,14 @@ func UseFnCache[T any](f *FnComponent) (*mnemo.Cache[T], error) {
 	return cache, err
 }
 
-func (fc *FnComponent) Dispatch(d *Dispatch) {
+func (fc FnComponent) Dispatch(d Dispatch) {
+	rendered := d
 	htmlBuf := new(bytes.Buffer)
-	fc.Render(ContextWithDispatch{
-		Context:  fc.Context,
-		Dispatch: d,
-	}, htmlBuf)
-	d.Data = htmlBuf.String()
-	d.send()
+	fc.Render(
+		ContextWithDispatch{
+			Context:  d.Context,
+			Dispatch: d,
+		}, htmlBuf)
+	rendered.Data = htmlBuf.String()
+	rendered.send()
 }

@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/google/uuid"
 	"github.com/kitkitchen/mnemo"
@@ -16,38 +15,33 @@ type Service struct {
 }
 
 type Handler struct {
-	mu            sync.Mutex
 	id            string
 	port          string
 	handlers      map[string]http.HandlerFunc
-	fncmpHandlers map[string]*FnComponent
+	fncmpHandlers map[string]FnComponent
 }
 
-func NewHandler(port string) *Handler {
+func NewHandler(port string) Handler {
 	//TODO: Call an open API endpoint with package update information
 	// Call for contributers etc.
 	// TODO: Cache and make available on an endpoint all api usage statistics
 	// User can opt out of this
 	// If they opt in, they must log in to admin panel and change the default password.
 	// Admin panel can also be registered with commands from mnemo
-	h := &Handler{
+	h := Handler{
 		id:            uuid.New().String(),
 		port:          port,
 		handlers:      make(map[string]http.HandlerFunc),
-		fncmpHandlers: make(map[string]*FnComponent),
+		fncmpHandlers: make(map[string]FnComponent),
 	}
 	RegisterDispatcher(h)
 	return h
 }
 
-func (h *Handler) Dispatch(d *Dispatch) {
+func (h Handler) Dispatch(d Dispatch) {
 
 	caches, err := mnemo.UseCache[FnComponent](components_store, fnCacheKey(d.TargetID))
 	if err != nil {
-		if d.Action == "main" {
-			d.send()
-			return
-		}
 		handler, ok := h.fncmpHandlers[d.Action]
 		if !ok {
 			log.Println("error: handler not found")
@@ -70,7 +64,7 @@ func (h *Handler) Dispatch(d *Dispatch) {
 		fmt.Println("redirect")
 		// make http request to HandlerFunc
 		// change function to "render"
-		// Replace the targetID with the body //TODO: give body a unique id
+		// Replace the targetID with the body
 		// send the dispatch to the websocket
 	case Event:
 		handler, ok := evtHandlers.get(d.Event.ID)
@@ -93,31 +87,22 @@ func (h *Handler) Dispatch(d *Dispatch) {
 	}
 }
 
-func (h *Handler) Handle(path string, handler http.Handler) *Handler {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (h Handler) Handle(path string, handler http.Handler) Handler {
 	h.handlers[path] = handler.ServeHTTP
 	return h
 }
 
-func (h *Handler) HandleFunc(path string, handler http.HandlerFunc) *Handler {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (h Handler) HandleFunc(path string, handler http.HandlerFunc) Handler {
 	h.handlers[path] = handler
 	return h
 }
 
-func (h *Handler) HandleFnCmp(path string, fn FnComponent) *Handler {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.fncmpHandlers[path] = &fn
+func (h Handler) HandleFnCmp(path string, fn FnComponent) Handler {
+	h.fncmpHandlers[path] = fn
 	return h
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
+func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(h.id)
 
 	if err != nil {
@@ -144,7 +129,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			TargetID: "root",
 			ConnID:   conn.ID,
 		}
-		b, err := main.Marshall()
+		b, err := main.Marshal()
 		if err != nil {
 			panic(err)
 		}
@@ -152,22 +137,22 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		go conn.listen()
 		conn.Publish(b)
 
-		_, ok := connPool.Get(cookie.Value)
-		if !ok {
-			log.Println("error: connection not found")
-			panic(err)
-		}
+		// _, ok := connPool.Get(cookie.Value)
+		// if !ok {
+		// 	log.Println("error: connection not found")
+		// 	panic(err)
+		// }
 
 		d := Dispatch{
 			Function: "render",
 			TargetID: "body",
-			ConnID:   cookie.Value,
+			ConnID:   conn.ID,
 			Action:   "/" + paths[3],
 			Method:   r.Method,
 			Message:  "New HTTP request",
 		}
 
-		h.Dispatch(&d)
+		h.Dispatch(d)
 
 	default:
 		script := js(h.port, h.id, r.URL.Path)
@@ -187,7 +172,7 @@ type Tester struct {
 	http.ResponseWriter
 }
 
-func (h *Handler) ListenAndServe() {
+func (h Handler) ListenAndServe() {
 	fmt.Println("Serving fncmp handler on port: ", h.port)
 	http.ListenAndServe(fmt.Sprintf(h.port), h)
 }

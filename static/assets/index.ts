@@ -25,6 +25,15 @@ type EventRequest = {
     data: Object;
 };
 
+type FnEventListener = {
+    id: string;
+    fn_id: string;
+    on: string;
+    action: string;
+    method: string;
+    data: Object;
+};
+
 type Dispatch = {
     function: "render" | "redirect" | "event" | "error" | "_connect";
     conn_id: string;
@@ -32,12 +41,8 @@ type Dispatch = {
     inner: boolean;
     action: string;
     method: string;
-    event: {
-        on: string;
-        action: string;
-        method: string;
-        id: string;
-    };
+    event: FnEventListener;
+    event_listeners: FnEventListener[];
     data: string;
     message: string;
 };
@@ -107,68 +112,56 @@ class FnSocketAPI {
     }
 
     funs: Functions = {
-        _render: (data: { id: string; inner: boolean; html: string }) => {
-            const elem = document.getElementById(data.id);
+        _render: (dispatch: Dispatch) => {
+            // Parse event listeners
+            const elem = document.getElementById(dispatch.target_id);
             if (!elem) {
-                return {
-                    error: true,
-                    message: "element not found: " + data,
-                };
+                dispatch.function = "error";
+                dispatch.message = "element not found: " + dispatch.target_id;
+                this.ws.send(JSON.stringify(dispatch));
             }
+            if (dispatch.inner) {
+                elem.innerHTML = dispatch.data;
+            } else {
+                elem.outerHTML = dispatch.data;
+            }
+            console.log("ELEMENT:");
+            console.log(elem);
+            console.log("HTML:");
+            console.log(dispatch.data);
 
-            elem.innerHTML = data.html;
-            // if (data.inner) {
-            //     elem.innerHTML = data.html;
-            // } else {
-            //     elem.outerHTML = data.html;
-            // }
-            console.log(data.html);
-            const elems = elem.querySelectorAll("[fc]");
-            console.log(elems);
-            elems.forEach((elem: Element) => {
-                console.log("ELEM");
-                console.log(elem);
+            dispatch.event_listeners.forEach((fc: FnEventListener) => {
+                const elem = document.getElementById(fc.fn_id);
                 if (!elem) {
                     return;
                 }
-                const _fc = elem.getAttribute("fc");
-                console.log("_FC ATTRIBUTE");
-                console.log(_fc);
-                const array = JSON.parse(_fc);
-                // Parse attributes
-                array.forEach((thisFc: any) => {
-                    const fc = thisFc as {
-                        on: string;
-                        action: string;
-                        method: "POST";
-                        id: string;
-                    };
-                    elem.addEventListener(fc.on, (ev) => {
-                        ev.preventDefault();
-                        console.log("event: " + fc.on);
-                        let data: any;
-                        if (fc.on == "submit") {
-                            const form = ev.target as HTMLFormElement;
-                            const formData = new FormData(form);
-                            data = Object.fromEntries(formData.entries());
-                            console.log(data);
-                        }
+                elem.addEventListener(fc.on, (ev) => {
+                    ev.preventDefault();
+                    console.log("event: " + fc.on);
+                    let data: any;
+                    if (fc.on == "submit") {
+                        const form = ev.target as HTMLFormElement;
+                        const formData = new FormData(form);
+                        data = Object.fromEntries(formData.entries());
+                        console.log(data);
+                    }
 
-                        let req: Dispatch = {
-                            function: "event",
-                            conn_id: conn_id,
-                            target_id: elem.id,
-                            inner: false,
-                            action: fc.action,
-                            method: fc.method,
-                            event: fc,
-                            data: JSON.stringify(data),
-                            message: "event dispatched",
-                        };
-                        console.log(req);
-                        // Send event to server
-                        this.ws.send(JSON.stringify(req));
-                    });
+                    let event: Dispatch = {
+                        function: "event",
+                        conn_id: conn_id,
+                        target_id: fc.fn_id,
+                        inner: false,
+                        action: fc.action,
+                        method: fc.method,
+                        event: fc,
+                        event_listeners: [],
+                        data: JSON.stringify(elem),
+                        message: "event dispatched",
+                    };
+                    console.log("EVENT:")
+                    console.log(event);
+                    // Send event to server
+                    this.ws.send(JSON.stringify(event));
                 });
             });
         },
@@ -177,24 +170,21 @@ class FnSocketAPI {
                 function: "redirect",
                 conn_id: conn_id,
                 target_id: e.target_id,
-                inner: false,
+                inner: e.inner,
                 action: e.action,
                 method: e.method,
                 event: e.event,
                 data: e.data,
+                event_listeners: e.event_listeners,
                 message: e.message,
             };
             // Send event to server
             this.ws.send(JSON.stringify(req));
         },
-        render: (e: Dispatch) => {
-            console.log(e);
+        render: (data: Dispatch) => {
+            console.log(data);
             // call websocket for render instructions
-            this.funs._render({
-                id: e.target_id,
-                inner: e.inner,
-                html: e.data as string,
-            });
+            this.funs._render(data);
         },
     };
 }
