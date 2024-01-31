@@ -1,130 +1,156 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 
 	"github.com/google/uuid"
-	"github.com/kitkitchen/mnemo"
 )
-
-const components_store mnemo.StoreKey = "fn_component_cache_store"
-
-var componentStore *mnemo.Store = nil
-
-type fnCacheKey mnemo.CacheKey
-
-func createStore() {
-	store, err := mnemo.NewStore(components_store)
-	if err != nil {
-		panic(err)
-	}
-	componentStore = store
-}
 
 type Component interface {
 	Render(ctx context.Context, w io.Writer) error
 }
+type HandleFn func(context.Context) FnComponent
 
 type FnComponent struct {
-	ID    string
-	Label string
-	FnRenderer
+	context.Context
+	dispatch *Dispatch
+	id       string
 }
 
-//TODO: Make a decoder that can parse custom html tags
-
-type FnRenderer struct {
-	FnID      string
-	component func(d Dispatch) Dispatch
-}
-
-func (r FnRenderer) Render(ctx context.Context, w io.Writer) error {
-	dctx, ok := ctx.(ContextWithDispatch)
-	if !ok {
-		panic("fncmp: error casting context to ContextWithDispatch")
+func NewFnComponent(c Component) FnComponent {
+	id := "fncmp-" + uuid.New().String()
+	f := FnComponent{
+		Context:  context.Background(),
+		id:       id,
+		dispatch: newDispatch(id),
 	}
-	dispatch := r.component(dctx.Dispatch)
-	if dispatch.EventListeners != nil {
-		b, err := json.Marshal(dispatch.EventListeners)
-		if err != nil {
-			return err
-		}
-		dispatch.Data = "<div id='" + r.FnID + "' fnc=" + string(b) + ">" + dispatch.Data + "</div>"
-	} else {
-		dispatch.Data = "<div id='" + r.FnID + "'>" + dispatch.Data + "</div>"
-	}
-	_, err := w.Write([]byte(dispatch.Data))
-	return err
-	// Read the component html into the FnRenderer
-	// and wrap it in a div with the component ID
-	//TODO: Does this need to be an array in string format?
-	// TODO: Add event listeners to dispatch as it's being passed
-	// then process all at once without using fc tags
-	// els := ""
-	// for k, el := range r.EventListeners {
-	// 	els += el.String()
-	// 	if k != len(r.EventListeners)-1 {
-	// 		els += ","
-	// 	}
-	// }
-}
-
-func NewFnComponent(f func(d Dispatch) Dispatch) FnComponent {
-	ID := uuid.New().String()
-	fc := FnComponent{
-		ID: ID,
-		FnRenderer: FnRenderer{
-			FnID:      ID,
-			component: f,
-		},
-	}
-
-	if componentStore == nil {
-		createStore()
-	}
-	// Create a cache for the component state
-	key := fnCacheKey(fc.ID)
-	fnCache, err := mnemo.NewCache[FnComponent](components_store, key)
-	if err != nil {
-		panic(err)
-	}
-	fnCache.SetReducer(func(state FnComponent) (mutation any) {
-		return state
-	})
-	fnCache.Cache(key, &fc)
-
-	fmt.Println(fnCache)
-
-	return fc
-}
-
-func (f *FnComponent) WithID(id string) *FnComponent {
-	f.ID = id
+	c.Render(f.Context, f)
 	return f
 }
 
-func WithFnCache[T any](f *FnComponent) (*mnemo.Cache[T], error) {
-	cache, err := mnemo.NewCache[T](components_store, fnCacheKey("component_"+f.ID+"_dev_cache"))
-	return cache, err
+func HandleMain(ctx context.Context) FnComponent {
+
+	return HandleWelcome(ctx)
 }
 
-func UseFnCache[T any](f *FnComponent) (*mnemo.Cache[T], error) {
-	cache, err := mnemo.UseCache[T](components_store, fnCacheKey("component_"+f.ID+"_dev_cache"))
-	return cache, err
+func HandleWelcome(ctx context.Context) FnComponent {
+
+	user, ok := ctx.Value(UserKey).(User)
+	if !ok {
+		return NewFnComponent(HTML(`
+		<div>User not found</div>
+		`))
+	}
+
+	return NewFnComponent(HTML(fmt.Sprintf(`
+	<div>Hello %s</div>
+	`, user.Username)))
 }
 
-func (fc FnComponent) Dispatch(d Dispatch) {
-	rendered := d
-	htmlBuf := new(bytes.Buffer)
-	fc.Render(
-		ContextWithDispatch{
-			Context:  d.Context,
-			Dispatch: d,
-		}, htmlBuf)
-	rendered.Data = htmlBuf.String()
-	rendered.send()
+func (f FnComponent) Render(ctx context.Context, w io.Writer) error {
+	w.Write([]byte(fmt.Sprint("<div id='" + f.id + "'>")))
+	HTML(f.dispatch.FnRender.HTML).Render(ctx, w)
+	w.Write(f.dispatch.buf)
+	w.Write([]byte("</div>"))
+	return nil
+}
+
+func (f FnComponent) Write(p []byte) (n int, err error) {
+	f.dispatch.buf = append(f.dispatch.buf, p...)
+	return len(p), nil
+}
+
+func (f FnComponent) WithContext(ctx context.Context) FnComponent {
+	f.Context = ctx
+	return f
+}
+
+func (f FnComponent) WithListeners(el ...EventListener) FnComponent {
+	f.dispatch.FnRender.EventListeners = append(f.dispatch.FnRender.EventListeners, el...)
+	return f
+}
+
+func (f FnComponent) WithRender() FnComponent {
+	f.dispatch.Function = Render
+	return f
+}
+
+func (f FnComponent) WithRedirect(action string) FnComponent {
+	f.dispatch.Function = Redirect
+	f.dispatch.Action = action
+	return f
+}
+
+func (f FnComponent) WithError(err error) FnComponent {
+	f.dispatch.Function = Error
+	f.dispatch.FnError.Message = err.Error()
+	return f
+}
+
+func (f FnComponent) WithCustom(fn string, arg any) FnComponent {
+	f.dispatch.Function = Custom
+	f.dispatch.FnCustom.Function = fn
+	f.dispatch.FnCustom.Data = arg
+	return f
+}
+
+func (f FnComponent) WithID(id string) FnComponent {
+	f.id = id
+	return f
+}
+
+func (f FnComponent) WithConnID(id string) FnComponent {
+	f.dispatch.ConnID = id
+	return f
+}
+
+func (f FnComponent) WithLabel(label string) FnComponent {
+	f.dispatch.Label = label
+	return f
+}
+
+func (f FnComponent) WithTargetID(id string) FnComponent {
+	f.dispatch.FnRender.TargetID = id
+	return f
+}
+
+func (f FnComponent) WithTag(tag Tag) FnComponent {
+	f.dispatch.FnRender.Tag = tag
+	return f
+}
+
+func (f FnComponent) AppendHTML(html string) FnComponent {
+	f.dispatch.FnRender.HTML += html
+	return f
+}
+
+func (f FnComponent) InnerHTML() FnComponent {
+	f.dispatch.FnRender.Outer = false
+	f.dispatch.FnRender.Inner = true
+	return f
+}
+
+func (f FnComponent) OuterHTML() FnComponent {
+	f.dispatch.FnRender.Inner = false
+	f.dispatch.FnRender.Outer = true
+	return f
+}
+
+// HTML implements the Component interface
+type HTML string
+
+func (h HTML) Render(ctx context.Context, w io.Writer) error {
+	_, err := w.Write([]byte(h))
+	return err
+}
+
+func RenderHTML(c ...Component) (html string) {
+	w := Writer{}
+	for _, v := range c {
+		v.Render(context.Background(), &w)
+	}
+	html = string(w.buf)
+	return html
 }

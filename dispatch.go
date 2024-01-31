@@ -1,113 +1,74 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"log"
 )
 
-// For passing to render interface
 type ContextWithDispatch struct {
 	context.Context
 	Dispatch
 }
 
-// TODO:
+const (
+	Render   FunctionName = "render"
+	Redirect FunctionName = "redirect"
+	Event    FunctionName = "event"
+	Error    FunctionName = "error"
+	Custom   FunctionName = "custom"
+)
+
+const (
+	HTMLTag Tag = "html"
+	Head    Tag = "head"
+	Body    Tag = "body"
+)
+
+type (
+	FunctionName string
+	Tag          string
+	FnRender     struct {
+		TargetID       string          `json:"target_id"`
+		Tag            Tag             `json:"tag"`
+		Inner          bool            `json:"inner"`
+		Outer          bool            `json:"outer"`
+		HTML           string          `json:"html"`
+		EventListeners []EventListener `json:"event_listeners"`
+	}
+	FnCustom struct {
+		Function string `json:"function"`
+		Data     any    `json:"data"`
+	}
+	FnError struct {
+		Message string `json:"message"`
+	}
+)
+
+func (fn FnError) Error() string {
+	return fn.Message
+}
+
+func newDispatch(key string) *Dispatch {
+	return &Dispatch{
+		Key: key,
+	}
+}
+
 type Dispatch struct {
-	context.Context `json:"-"`
-	Function        FunctionName `json:"function"`
-	// todo: mask connID
-	ConnID         string          `json:"conn_id"`
-	TargetID       string          `json:"target_id"`
-	Inner          bool            `json:"inner"`
-	Action         string          `json:"action"`
-	Method         string          `json:"method"`
-	Event          EventListener   `json:"event"`
-	Data           string          `json:"data"`
-	EventListeners []EventListener `json:"event_listeners"`
-	Message        string          `json:"message"`
+	buf       []byte        `json:"-"`
+	Conn      *Conn         `json:"-"`
+	ConnID    string        `json:"conn_id"`
+	Key       string        `json:"key"`
+	Function  FunctionName  `json:"function"`
+	ID        string        `json:"id"`
+	Action    string        `json:"action"`
+	HandlerID string        `json:"handler_id"`
+	Label     string        `json:"label"`
+	FnEvent   EventListener `json:"event"`
+	FnRender  FnRender      `json:"render"`
+	FnError   FnError       `json:"error"`
+	FnCustom  FnCustom      `json:"custom"`
 }
 
-func (d *Dispatch) WithContext(ctx context.Context) *Dispatch {
-	d.Context = ctx
-	return d
-}
+func (d *Dispatch) Render() {
 
-func (d *Dispatch) WithFunction(f FunctionName) *Dispatch {
-	d.Function = f
-	return d
-}
-
-func (d *Dispatch) WithEventListeners(el ...EventListener) *Dispatch {
-	d.EventListeners = append(d.EventListeners, el...)
-	return d
-}
-
-func (d Dispatch) IsRender() bool {
-	return d.Function == Render
-}
-
-func (d Dispatch) IsRedirect() bool {
-	return d.Function == Redirect
-}
-
-func (d Dispatch) IsEvent() bool {
-	return d.Function == Event
-}
-
-func (d Dispatch) IsError() bool {
-	return d.Function == Error
-}
-
-func (d *Dispatch) AppendComponent(c Component) *Dispatch {
-	buf := new(bytes.Buffer)
-	c.Render(ContextWithDispatch{
-		Context:  context.Background(),
-		Dispatch: *d,
-	}, buf)
-	d.Data = buf.String()
-	return d
-}
-
-func (d *Dispatch) AppendHTML(html string) *Dispatch {
-	d.Data += html
-	return d
-}
-
-func (d *Dispatch) SwapComponent(c Component) *Dispatch {
-	buf := new(bytes.Buffer)
-	c.Render(d.Context, buf)
-	d.Data = buf.String()
-	return d
-}
-
-func (d *Dispatch) InnerHTML() *Dispatch {
-	d.Inner = true
-	return d
-}
-
-func (d *Dispatch) Target(id string) *Dispatch {
-	d.TargetID = id
-	return d
-}
-
-func (d Dispatch) send() {
-	conn, ok := connPool.Get(d.ConnID)
-	if !ok {
-		log.Println("fncmp: ERROR retrieving connection to client: " + d.ConnID)
-	}
-	b, err := json.Marshal(d)
-	if err != nil {
-		log.Println(err)
-	}
-	conn.Publish(b)
-}
-
-func (d Dispatch) Marshal() ([]byte, error) {
-	b, err := json.Marshal(d)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
 }

@@ -6,28 +6,6 @@ import (
 	"github.com/google/uuid"
 )
 
-var evtHandlers = &eventHandlers{
-	ef: make(map[string]func(d Dispatch) Dispatch),
-}
-
-type eventHandlers struct {
-	mu sync.Mutex
-	ef map[string]func(d Dispatch) Dispatch
-}
-
-func (e *eventHandlers) add(id string, f func(d Dispatch) Dispatch) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.ef[id] = f
-}
-
-func (e *eventHandlers) get(id string) (func(d Dispatch) Dispatch, bool) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	f, ok := e.ef[id]
-	return f, ok
-}
-
 type OnEvent string
 
 // Event types
@@ -115,42 +93,28 @@ const (
 )
 
 type EventListener struct {
-	ID     string  `json:"id"`
-	FnID   string  `json:"fn_id"`
-	On     OnEvent `json:"on"`
-	Action string  `json:"action"`
-	Method string  `json:"method"`
-	Data   any     `json:"data"`
+	ID      string   `json:"id"`
+	FnID    string   `json:"fn_id"`
+	Handler HandleFn `json:"-"`
+	On      OnEvent  `json:"on"`
+	Action  string   `json:"action"`
+	Method  string   `json:"method"`
+	Data    any      `json:"data"`
 }
 
 // TODO update this to regular dispatch func
 // Creates a new EventListener with OnEvent for component with ID that triggers function f
-func NewEventListener(on OnEvent, ID string, f func(d Dispatch) Dispatch, o ...Opt[EventListener]) EventListener {
+func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
 	id := uuid.New().String()
 	el := EventListener{
-		ID:   id,
-		FnID: ID,
-		On:   on,
-	}
-	for _, opt := range o {
-		opt(&el)
+		FnID:    f.id,
+		Handler: h,
+		ID:      id,
+		On:      on,
 	}
 
-	evtHandlers.add(id, f)
 	evtListeners.Add(id, el)
 	return el
-}
-
-func WithAction(action string) Opt[EventListener] {
-	return func(e *EventListener) {
-		e.Action = action
-	}
-}
-
-func WithMethod(method string) Opt[EventListener] {
-	return func(e *EventListener) {
-		e.Method = method
-	}
 }
 
 type eventListeners struct {

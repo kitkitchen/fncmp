@@ -1,178 +1,197 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/kitkitchen/mnemo"
 )
 
-type Service struct {
-}
+var handlers = make(map[string]Handler)
 
 type Handler struct {
-	id            string
-	port          string
-	handlers      map[string]http.HandlerFunc
-	fncmpHandlers map[string]FnComponent
+	http.Handler
+	port        string
+	id          string
+	in          chan Dispatch
+	out         chan FnComponent
+	handlesFn   map[string]HandleFn
+	handlesHTTP map[string]http.HandlerFunc
 }
 
-func NewHandler(port string) Handler {
-	//TODO: Call an open API endpoint with package update information
-	// Call for contributers etc.
-	// TODO: Cache and make available on an endpoint all api usage statistics
-	// User can opt out of this
-	// If they opt in, they must log in to admin panel and change the default password.
-	// Admin panel can also be registered with commands from mnemo
-	h := Handler{
-		id:            uuid.New().String(),
-		port:          port,
-		handlers:      make(map[string]http.HandlerFunc),
-		fncmpHandlers: make(map[string]FnComponent),
+func NewHandler(port string, h http.Handler) *Handler {
+	handler := Handler{
+		id:          uuid.New().String(),
+		port:        port,
+		Handler:     h,
+		in:          make(chan Dispatch, 1028),
+		out:         make(chan FnComponent, 1028),
+		handlesFn:   make(map[string]HandleFn),
+		handlesHTTP: make(map[string]http.HandlerFunc),
 	}
-	RegisterDispatcher(h)
-	return h
+	handlers[handler.id] = handler
+	handler.listen()
+	return &handler
 }
 
-func (h Handler) Dispatch(d Dispatch) {
-
-	caches, err := mnemo.UseCache[FnComponent](components_store, fnCacheKey(d.TargetID))
-	if err != nil {
-		handler, ok := h.fncmpHandlers[d.Action]
-		if !ok {
-			log.Println("error: handler not found")
-			return
-		}
-		handler.Dispatch(d)
-		return
-	}
-	cache, ok := caches.Get(d.TargetID)
-	if !ok {
-		log.Println("error: component not found in cache")
-		return
-	}
-	fnComponent := cache.Data
-
-	switch d.Function {
-	case Render:
-		fnComponent.Dispatch(d)
-	case Redirect:
-		fmt.Println("redirect")
-		// make http request to HandlerFunc
-		// change function to "render"
-		// Replace the targetID with the body
-		// send the dispatch to the websocket
-	case Event:
-		handler, ok := evtHandlers.get(d.Event.ID)
-		if !ok {
-			log.Println("error: event handler not found")
-			return
-		}
-		handler(d)
-		// find event listener in global registry
-		// call event listener function with dispatch
-		// find function in global registry, pass a *copy* of dispatch to function and render the
-		// returned component with the Dispatch renderer if the component is not nil.
-		// then send the dispatch to the websocket
-		// TODO: utility functions for dispatch cancellation, overwriting, etc.
-	case Error:
-		fmt.Println(fmt.Errorf(d.Message))
-	default:
-		// Call user custom function?
-		fmt.Println("default")
-	}
+func (h Handler) ID() string {
+	return h.id
 }
 
-func (h Handler) Handle(path string, handler http.Handler) Handler {
-	h.handlers[path] = handler.ServeHTTP
-	return h
+func (h *Handler) HandleFn(path string, handler HandleFn) {
+	h.handlesFn[path] = handler
 }
 
-func (h Handler) HandleFunc(path string, handler http.HandlerFunc) Handler {
-	h.handlers[path] = handler
-	return h
+func (h *Handler) HandleFunc(path string, handler func(w http.ResponseWriter, r *http.Request)) {
+	h.handlesHTTP[path] = handler
 }
 
-func (h Handler) HandleFnCmp(path string, fn FnComponent) Handler {
-	h.fncmpHandlers[path] = fn
-	return h
-}
-
-func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// get cookie and check if it exists
 	cookie, err := r.Cookie(h.id)
-
 	if err != nil {
-		log.Println("error: ", err)
+		log.Println(err)
+		// Set cookie
 		cookie = NewCookie(h.id, uuid.NewString(), r.URL.Path)
+		http.SetCookie(w, cookie)
 		r.AddCookie(cookie)
 	}
-	http.SetCookie(w, cookie)
 
-	paths := strings.Split(r.URL.Path, "/")
+	// split path
+	path := strings.Split(r.URL.Path, "/")
 
-	switch paths[1] {
-	case h.id:
-		// upgrade to websocket
-		conn, err := NewConn(w, r, cookie.Value)
-		if err != nil {
-			return
+	if path[len(path)-1] == h.id {
+		var p string
+		if cookie.Path == "" {
+			p = "/"
+		} else {
+			p = cookie.Path
 		}
-
-		log.Print("new connection: ", conn.ID)
-
-		main := Dispatch{
-			Function: "_connect",
-			TargetID: "root",
-			ConnID:   conn.ID,
-		}
-		b, err := main.Marshal()
-		if err != nil {
-			panic(err)
-		}
-
-		go conn.listen()
-		conn.Publish(b)
-
-		// _, ok := connPool.Get(cookie.Value)
-		// if !ok {
-		// 	log.Println("error: connection not found")
-		// 	panic(err)
-		// }
-
-		d := Dispatch{
-			Function: "render",
-			TargetID: "body",
-			ConnID:   conn.ID,
-			Action:   "/" + paths[3],
-			Method:   r.Method,
-			Message:  "New HTTP request",
-		}
-
-		h.Dispatch(d)
-
-	default:
-		script := js(h.port, h.id, r.URL.Path)
-		html := fmt.Sprintf("<html><head><script>%s</script><body id='body'><div id='root'></div></body></html>", script)
-		w.Write([]byte(html))
+		h.HandleWS(w, r, cookie.Value, p)
+		return
+	} else {
+		fmt.Println(path[len(path)-1])
 	}
-	// return
 
-	_, ok := h.handlers[r.URL.Path]
-	if ok {
-		h.handlers[r.URL.Path](w, r)
+	writer := Writer{ResponseWriter: w}
+	script := js(h.port, r.URL.Path+h.id)
+	writer.Write([]byte("<script>" + script + "</script>"))
+	if h.handlesHTTP[r.URL.Path] != nil {
+		// FIXME: This is probably where bad url paths are getting stuck
+		MiddleWareDispatch(h.handlesHTTP[r.URL.Path]).ServeHTTP(&writer, r)
+	} else {
+		h.Handler.ServeHTTP(w, r)
 	}
+
+	w.Write(writer.buf)
 }
 
-type Tester struct {
-	io.Writer
+func (h *Handler) HandleWS(w http.ResponseWriter, r *http.Request, id string, path string) {
+	// Upgrade connection to websocket
+	conn, err := NewConn(w, r, h.id, id)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	conn.HandlerID = h.id
+
+	go conn.listen()
+	handler, ok := h.handlesFn[path]
+	if !ok {
+		log.Printf("error: no handler found for path '%s'", path)
+		return
+	}
+
+	fn := handler(r.Context()).WithConnID(conn.ID).
+		WithRender().WithTag("body").InnerHTML()
+	fn.dispatch.Conn = conn
+	fn.dispatch.HandlerID = h.id
+	h.out <- fn
+	fmt.Println(fn)
+}
+
+// Dispatch handles the routing of a Dispatch to the appropriate function.
+// It is called by the Conn's listen method.
+func (h *Handler) listen() {
+	go func(h *Handler) {
+		for d := range h.in {
+			switch d.Function {
+			case Event:
+				h.Event(d)
+			case Error:
+				h.Error(d)
+			default:
+				d.FnError.Message = fmt.Sprintf(
+					"function '%s' found, expected event or error on 'in' channel", d.Function)
+				h.Error(d)
+				return
+			}
+		}
+	}(h)
+	go func(h *Handler) {
+		for fn := range h.out {
+			switch fn.dispatch.Function {
+			case Render:
+				h.Render(fn)
+			case Redirect:
+				h.Redirect(fn)
+			}
+		}
+	}(h)
+}
+
+func (h Handler) Render(fn FnComponent) {
+	var data Writer
+	fn.Render(context.Background(), &data)
+	fn.dispatch.FnRender.HTML = string(data.buf)
+	b, err := json.Marshal(fn.dispatch)
+	if err != nil {
+		log.Println(err)
+		fn.dispatch.FnError.Message = err.Error()
+		h.Error(*fn.dispatch)
+		return
+	}
+	fn.dispatch.Conn.Publish(b)
+}
+
+func (h Handler) Redirect(fn FnComponent) {
+	fmt.Println(fn)
+	// Handler redirect
+}
+
+func (h Handler) Event(d Dispatch) {
+	listener, ok := evtListeners.Get(d.FnEvent.ID)
+	if !ok {
+		d.FnError.Message = fmt.Sprintf("error: event listener with id '%s' not found", d.FnEvent.ID)
+		h.Error(d)
+		return
+	}
+	response := listener.Handler(context.WithValue(context.Background(), EventKey, d.FnEvent))
+	h.out <- response
+}
+
+func (h Handler) Error(d Dispatch) {
+	log.Println(d.FnError)
+}
+
+type Writer struct {
 	http.ResponseWriter
+	buf []byte
 }
 
-func (h Handler) ListenAndServe() {
-	fmt.Println("Serving fncmp handler on port: ", h.port)
-	http.ListenAndServe(fmt.Sprintf(h.port), h)
+func (w *Writer) Write(p []byte) (n int, err error) {
+	w.buf = append(w.buf, p...)
+	return len(p), nil
+}
+
+func MiddleWareDispatch(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get route and pass to handler with information
+		next(w, r)
+	}
 }
