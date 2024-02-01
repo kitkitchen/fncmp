@@ -78,7 +78,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writer := Writer{ResponseWriter: w}
-	script := js(h.port, r.URL.Path+h.id)
+	var socketPath string
+	if r.URL.Path == "/" {
+		socketPath = r.URL.Path + h.id
+	} else {
+		socketPath = r.URL.Path + "/" + h.id
+	}
+	script := js(h.port, socketPath)
 	writer.Write([]byte("<script>" + script + "</script>"))
 	if h.handlesHTTP[r.URL.Path] != nil {
 		// FIXME: This is probably where bad url paths are getting stuck

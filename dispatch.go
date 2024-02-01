@@ -1,21 +1,16 @@
 package main
 
-import (
-	"context"
-)
-
-type ContextWithDispatch struct {
-	context.Context
-	Dispatch
-}
+type FunctionName string
 
 const (
 	Render   FunctionName = "render"
 	Redirect FunctionName = "redirect"
 	Event    FunctionName = "event"
-	Error    FunctionName = "error"
 	Custom   FunctionName = "custom"
+	Error    FunctionName = "error"
 )
+
+type Tag string
 
 const (
 	HTMLTag Tag = "html"
@@ -24,15 +19,17 @@ const (
 )
 
 type (
-	FunctionName string
-	Tag          string
-	FnRender     struct {
+	FnRender struct {
 		TargetID       string          `json:"target_id"`
 		Tag            Tag             `json:"tag"`
 		Inner          bool            `json:"inner"`
 		Outer          bool            `json:"outer"`
+		Append         bool            `json:"append"`
 		HTML           string          `json:"html"`
 		EventListeners []EventListener `json:"event_listeners"`
+	}
+	FnRedirect struct {
+		URL string `json:"url"`
 	}
 	FnCustom struct {
 		Function string `json:"function"`
@@ -54,19 +51,20 @@ func newDispatch(key string) *Dispatch {
 }
 
 type Dispatch struct {
-	buf       []byte        `json:"-"`
-	Conn      *Conn         `json:"-"`
-	ConnID    string        `json:"conn_id"`
-	Key       string        `json:"key"`
-	Function  FunctionName  `json:"function"`
-	ID        string        `json:"id"`
-	Action    string        `json:"action"`
-	HandlerID string        `json:"handler_id"`
-	Label     string        `json:"label"`
-	FnEvent   EventListener `json:"event"`
-	FnRender  FnRender      `json:"render"`
-	FnError   FnError       `json:"error"`
-	FnCustom  FnCustom      `json:"custom"`
+	buf        []byte        `json:"-"`
+	Conn       *Conn         `json:"-"`
+	ID         string        `json:"id"`
+	Key        string        `json:"key"`
+	ConnID     string        `json:"conn_id"`
+	HandlerID  string        `json:"handler_id"`
+	Action     string        `json:"action"`
+	Label      string        `json:"label"`
+	Function   FunctionName  `json:"function"`
+	FnEvent    EventListener `json:"event"`
+	FnRender   FnRender      `json:"render"`
+	FnRedirect FnRedirect    `json:"redirect"`
+	FnCustom   FnCustom      `json:"custom"`
+	FnError    FnError       `json:"error"`
 }
 
 func (d *Dispatch) Render() {
