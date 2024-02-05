@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"sync"
 
 	"github.com/google/uuid"
@@ -93,13 +94,13 @@ const (
 )
 
 type EventListener struct {
-	ID      string   `json:"id"`
-	FnID    string   `json:"fn_id"`
-	Handler HandleFn `json:"-"`
-	On      OnEvent  `json:"on"`
-	Action  string   `json:"action"`
-	Method  string   `json:"method"`
-	Data    any      `json:"data"`
+	ID       string         `json:"id"`
+	TargetID string         `json:"target_id"`
+	Handler  HandleFn       `json:"-"`
+	On       OnEvent        `json:"on"`
+	Action   string         `json:"action"`
+	Method   string         `json:"method"`
+	Data     map[string]any `json:"data"`
 }
 
 // TODO update this to regular dispatch func
@@ -107,15 +108,17 @@ type EventListener struct {
 func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
 	id := uuid.New().String()
 	el := EventListener{
-		FnID:    f.id,
-		Handler: h,
-		ID:      id,
-		On:      on,
+		TargetID: f.id,
+		Handler:  h,
+		ID:       id,
+		On:       on,
 	}
 
 	evtListeners.Add(id, el)
 	return el
 }
+
+// Store and retrieve event listeners
 
 type eventListeners struct {
 	mu sync.Mutex
@@ -150,4 +153,14 @@ func (e *eventListeners) Every() (el []EventListener) {
 		el = append(el, e)
 	}
 	return
+}
+
+func UnmarshalEventData[T any](e EventListener) (T, error) {
+	var t T
+	b, err := json.Marshal(e.Data)
+	if err != nil {
+		return t, err
+	}
+	err = json.Unmarshal(b, &t)
+	return t, err
 }

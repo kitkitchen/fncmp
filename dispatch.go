@@ -25,6 +25,7 @@ type (
 		Inner          bool            `json:"inner"`
 		Outer          bool            `json:"outer"`
 		Append         bool            `json:"append"`
+		Prepend        bool            `json:"prepend"`
 		HTML           string          `json:"html"`
 		EventListeners []EventListener `json:"event_listeners"`
 	}
@@ -65,8 +66,4 @@ type Dispatch struct {
 	FnRedirect FnRedirect    `json:"redirect"`
 	FnCustom   FnCustom      `json:"custom"`
 	FnError    FnError       `json:"error"`
-}
-
-func (d *Dispatch) Render() {
-
 }

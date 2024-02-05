@@ -19,32 +19,82 @@ type FnComponent struct {
 	id       string
 }
 
-func NewFnComponent(c Component) FnComponent {
+func NewFn(c Component) FnComponent {
 	id := "fncmp-" + uuid.New().String()
 	f := FnComponent{
 		Context:  context.Background(),
 		id:       id,
 		dispatch: newDispatch(id),
-	}
+	}.WithTag(Body).WithRender().InnerHTML()
 	c.Render(f.Context, f)
 	return f
 }
 
+func HandleLogin(ctx context.Context) FnComponent {
+	event, ok := ctx.Value(EventKey).(EventListener)
+	//TODO: Include original component with event so it can be returned or appended to
+	if !ok {
+		return NewFn(HTML(`
+		<div>Event not found</div>
+	`))
+	}
+	if !ok {
+		err := fmt.Errorf("error: expected user, got %T", event.Data)
+		return LoginForm(context.WithValue(ctx, ErrorKey, err))
+	}
+
+	user, err := UnmarshalEventData[User](event)
+	if err != nil {
+		return LoginForm(context.WithValue(ctx, ErrorKey, err))
+	}
+
+	if user.Username != "Sean" || user.Password != "password" {
+		err = fmt.Errorf("error: invalid username or password")
+		return LoginForm(context.WithValue(ctx, ErrorKey, err))
+	}
+
+	return Welcome(context.WithValue(ctx, UserKey, user)).WithTag(Body)
+}
+
+func Welcome(ctx context.Context) FnComponent {
+
+	return NewFn(HTML(`
+	<div>Welcome</div>
+	`))
+}
+
+func LoginForm(ctx context.Context) FnComponent {
+	err, ok := ctx.Value(ErrorKey).(error)
+	msg := ""
+	if ok {
+		msg = err.Error()
+	}
+
+	return NewFn(HTML(`
+	<form method="POST">
+		<input type="text" name="username" placeholder="username">
+		<input type="password" name="password" placeholder="password">
+		<button type="submit">Login</button>
+		<div><p>`+msg+`</p></div>
+	</form>
+	`)).WithEvents(HandleLogin, OnSubmit)
+}
+
 func HandleMain(ctx context.Context) FnComponent {
 
-	return HandleWelcome(ctx)
+	return LoginForm(ctx)
 }
 
 func HandleWelcome(ctx context.Context) FnComponent {
 
 	user, ok := ctx.Value(UserKey).(User)
 	if !ok {
-		return NewFnComponent(HTML(`
-		<div>User not found</div>
+		return NewFn(HTML(`
+		<div><p>User not found</p></div>
 		`))
 	}
 
-	return NewFnComponent(HTML(fmt.Sprintf(`
+	return NewFn(HTML(fmt.Sprintf(`
 	<div>Hello %s</div>
 	`, user.Username)))
 }
@@ -67,8 +117,11 @@ func (f FnComponent) WithContext(ctx context.Context) FnComponent {
 	return f
 }
 
-func (f FnComponent) WithListeners(el ...EventListener) FnComponent {
-	f.dispatch.FnRender.EventListeners = append(f.dispatch.FnRender.EventListeners, el...)
+func (f FnComponent) WithEvents(h HandleFn, e ...OnEvent) FnComponent {
+	for _, v := range e {
+		el := NewEventListener(v, f, h)
+		f.dispatch.FnRender.EventListeners = append(f.dispatch.FnRender.EventListeners, el)
+	}
 	return f
 }
 

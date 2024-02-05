@@ -32,7 +32,6 @@ class Socket {
             // if(d.key != key) {
             //     throw new Error("ws: invalid key...");
             // }
-            console.log(d);
             api.Process(this, d);
         };
     }
@@ -50,7 +49,11 @@ class API {
         };
         this.funs = {
             render: (d) => {
+                console.log("RENDER:");
+                console.log(d);
                 let elem = null;
+                const parsed = new DOMParser().parseFromString(d.render.html, "text/html").firstChild;
+                const html = parsed.getElementsByTagName("body")[0].innerHTML;
                 // Select element to render to
                 if (d.render.tag != "") {
                     elem = this.utils.getElementsByTagName(d.render.tag)[0];
@@ -68,22 +71,23 @@ class API {
                 else {
                     return this.Error(d, "no target or tag specified");
                 }
-                if (!elem) {
-                    return this.Error(d, "element not found");
-                }
                 // Render element
                 if (d.render.inner) {
-                    this.utils.replaceElementInner(elem, d.render.html);
-                    return;
+                    elem.innerHTML = html;
                 }
                 if (d.render.outer) {
-                    this.utils.replaceElementOuter(elem, d.render.html);
-                    return;
+                    elem.outerHTML = html;
                 }
                 if (d.render.append) {
-                    this.utils.appendElement(elem, d.render.html);
-                    return;
+                    const div = document.createElement("div");
+                    div.innerHTML = html;
+                    elem.appendChild(div);
                 }
+                if (d.render.prepend) {
+                    elem.prepend(html);
+                }
+                this.Dispatch(this.utils.addEventListeners(d));
+                return;
             },
         };
         this.utils = {
@@ -98,16 +102,6 @@ class API {
             getElementsByTagName: (tag) => document.getElementsByTagName(tag),
             getElementByClassName: (className) => document.getElementsByClassName(className),
             getElementByAttribute: (attribute) => document.querySelectorAll(`[${attribute}]`),
-            // Replace elements
-            replaceElementOuter: (elem, html) => {
-                elem.outerHTML = html;
-            },
-            replaceElementInner: (elem, html) => {
-                elem.innerHTML = html;
-            },
-            appendElement: (elem, html) => {
-                elem.innerHTML += html;
-            },
             trackTouch: (elem) => {
                 elem.addEventListener("touchstart", (ev) => {
                     //TODO: event object comes back as touch specific
@@ -120,16 +114,25 @@ class API {
                 });
             },
             addEventListeners: (d) => {
+                if (!d.render.event_listeners)
+                    return;
                 // Event listeners
                 d.render.event_listeners.forEach((listener) => {
-                    let elem = document.getElementById(listener.fn_id);
+                    console.log("listener: " + listener);
+                    let elem = document.getElementById(listener.target_id);
                     if (!elem) {
+                        console.log("elem not found");
                         this.Error(d, "element not found");
                         return;
                     }
                     if (elem.firstChild) {
+                        console.log("elem has children");
                         elem = elem.firstChild;
                     }
+                    else {
+                        console.log("elem has no children");
+                    }
+                    console.log("elem with listener: " + elem);
                     elem.addEventListener(listener.on, (ev) => {
                         ev.preventDefault();
                         console.log("event: " + listener.on);
@@ -170,12 +173,8 @@ class API {
                 return;
             case "render":
                 this.Dispatch(this.funs.render(d));
-                if (!d.render.event_listeners)
-                    return;
-                this.Dispatch(this.utils.addEventListeners(d));
-                return;
             default:
-                this.Error(d, "invalid function: " + d.function);
+                // this.Error(d, "invalid function: " + d.function);
                 break;
         }
     }

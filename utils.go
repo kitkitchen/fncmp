@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-func Sanitize(html string) string {
-	sanitized := template.HTMLEscapeString(html)
+func SanitizeInput(input string) string {
+	sanitized := template.HTMLEscapeString(input)
 	sanitized = strings.ReplaceAll(sanitized, "&#34;", "")
 	sanitized = strings.ReplaceAll(sanitized, "&#39;", "'")
 	sanitized = strings.ReplaceAll(sanitized, "&#96;", "`")
@@ -23,5 +23,11 @@ func Sanitize(html string) string {
 	sanitized = strings.ReplaceAll(sanitized, "&#x3c;", "<")
 	sanitized = strings.ReplaceAll(sanitized, "&#x22;", "")
 
+	return sanitized
+}
+func SanitizeHTML(html string) string {
+	// sanitized := template.HTMLEscapeString(html)
+	sanitized := strings.ReplaceAll(html, "\n", "")
+	sanitized = strings.ReplaceAll(sanitized, "\t", "")
 	return sanitized
 }

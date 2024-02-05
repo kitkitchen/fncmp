@@ -14,7 +14,7 @@ type FnCustom = {
 
 type FnEventListener = {
     id: string;
-    fn_id: string;
+    target_id: string;
     on: string;
     action: string;
     method: string;
@@ -28,6 +28,7 @@ type FnRender = {
     inner: boolean;
     outer: boolean;
     append: boolean;
+    prepend: boolean;
     html: string;
     event_listeners: FnEventListener[];
 };
@@ -88,7 +89,7 @@ class Socket {
             // if(d.key != key) {
             //     throw new Error("ws: invalid key...");
             // }
-            console.log(d);
+
             api.Process(this, d);
         };
     }
@@ -114,11 +115,8 @@ class API {
                 return;
             case "render":
                 this.Dispatch(this.funs.render(d));
-                if (!d.render.event_listeners) return;
-                this.Dispatch(this.utils.addEventListeners(d));
-                return;
             default:
-                this.Error(d, "invalid function: " + d.function);
+                // this.Error(d, "invalid function: " + d.function);
                 break;
         }
     }
@@ -133,7 +131,14 @@ class API {
 
     private funs: DispatchFunctions = {
         render: (d: Dispatch) => {
+            console.log("RENDER:");
+            console.log(d);
             let elem: Element | null = null;
+            const parsed = new DOMParser().parseFromString(
+                d.render.html,
+                "text/html"
+            ).firstChild as HTMLElement;
+            const html = parsed.getElementsByTagName("body")[0].innerHTML;
 
             // Select element to render to
             if (d.render.tag != "") {
@@ -156,29 +161,25 @@ class API {
             } else {
                 return this.Error(d, "no target or tag specified");
             }
-            if (!elem) {
-                return this.Error(d, "element not found");
-            }
 
             // Render element
             if (d.render.inner) {
-                this.utils.replaceElementInner(
-                    elem as HTMLElement,
-                    d.render.html
-                );
-                return;
+                elem.innerHTML = html;
             }
             if (d.render.outer) {
-                this.utils.replaceElementOuter(
-                    elem as HTMLElement,
-                    d.render.html
-                );
-                return;
+                elem.outerHTML = html;
             }
             if (d.render.append) {
-                this.utils.appendElement(elem as HTMLElement, d.render.html);
-                return;
+                const div = document.createElement("div");
+                div.innerHTML = html;
+                elem.appendChild(div);
             }
+            if(d.render.prepend) {
+                elem.prepend(html);
+            }
+
+            this.Dispatch(this.utils.addEventListeners(d));
+            return;
         },
     };
 
@@ -198,16 +199,6 @@ class API {
             document.getElementsByClassName(className),
         getElementByAttribute: (attribute: string) =>
             document.querySelectorAll(`[${attribute}]`),
-        // Replace elements
-        replaceElementOuter: (elem: HTMLElement, html: string) => {
-            elem.outerHTML = html;
-        },
-        replaceElementInner: (elem: HTMLElement, html: string) => {
-            elem.innerHTML = html;
-        },
-        appendElement: (elem: HTMLElement, html: string) => {
-            elem.innerHTML += html;
-        },
         trackTouch: (elem: HTMLElement) => {
             elem.addEventListener("touchstart", (ev) => {
                 //TODO: event object comes back as touch specific
@@ -220,16 +211,23 @@ class API {
             });
         },
         addEventListeners: (d: Dispatch) => {
+            if (!d.render.event_listeners) return;
             // Event listeners
             d.render.event_listeners.forEach((listener: FnEventListener) => {
-                let elem = document.getElementById(listener.fn_id);
+                console.log("listener: " + listener);
+                let elem = document.getElementById(listener.target_id);
                 if (!elem) {
+                    console.log("elem not found");
                     this.Error(d, "element not found");
                     return;
                 }
                 if (elem.firstChild) {
+                    console.log("elem has children");
                     elem = elem.firstChild as HTMLElement;
+                } else {
+                    console.log("elem has no children");
                 }
+                console.log("elem with listener: " + elem);
                 elem.addEventListener(listener.on, (ev) => {
                     ev.preventDefault();
                     console.log("event: " + listener.on);

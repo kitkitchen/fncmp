@@ -150,10 +150,11 @@ func (h *Handler) listen() {
 	}(h)
 }
 
+// TODO: these should be Dispatch receiver methods
 func (h Handler) Render(fn FnComponent) {
 	var data Writer
 	fn.Render(context.Background(), &data)
-	fn.dispatch.FnRender.HTML = string(data.buf)
+	fn.dispatch.FnRender.HTML = SanitizeHTML(string(data.buf))
 	b, err := json.Marshal(fn.dispatch)
 	if err != nil {
 		log.Println(err)
@@ -176,7 +177,16 @@ func (h Handler) Event(d Dispatch) {
 		h.Error(d)
 		return
 	}
-	response := listener.Handler(context.WithValue(context.Background(), EventKey, d.FnEvent))
+	listener.Data = d.FnEvent.Data
+	response := listener.Handler(context.WithValue(context.Background(), EventKey, listener))
+	// response.id = listener.TargetID
+	//TODO: Ensure conn is always attached.
+	// could be reassigned elsewhere
+	response.dispatch.Conn = d.Conn
+	response.dispatch.HandlerID = d.HandlerID
+	// response.dispatch.ConnID = d.ConnID
+	// response.dispatch.FnRender.TargetID = d.FnEvent.TargetID
+	// response.dispatch.FnRender.EventListeners = []EventListener{}
 	h.out <- response
 }
 

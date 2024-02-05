@@ -6,7 +6,8 @@ type ContextKey string
 
 const (
 	UserKey  ContextKey = "user"
-	EventKey ContextKey = "listener"
+	EventKey ContextKey = "event"
+	ErrorKey ContextKey = "error"
 )
 
 type ContextWithDispatch struct {
