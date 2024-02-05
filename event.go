@@ -7,28 +7,6 @@ import (
 	"github.com/google/uuid"
 )
 
-var evtHandlers = &eventHandlers{
-	ef: make(map[string]func(d *Dispatch) Component),
-}
-
-type eventHandlers struct {
-	mu sync.Mutex
-	ef map[string]func(d *Dispatch) Component
-}
-
-func (e *eventHandlers) add(id string, f func(d *Dispatch) Component) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.ef[id] = f
-}
-
-func (e *eventHandlers) get(id string) (func(d *Dispatch) Component, bool) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	f, ok := e.ef[id]
-	return f, ok
-}
-
 type OnEvent string
 
 // Event types
@@ -116,46 +94,31 @@ const (
 )
 
 type EventListener struct {
-	ID     string  `json:"id"`
-	On     OnEvent `json:"on"`
-	Action string  `json:"action"`
-	Method string  `json:"method"`
+	ID       string         `json:"id"`
+	TargetID string         `json:"target_id"`
+	Handler  HandleFn       `json:"-"`
+	On       OnEvent        `json:"on"`
+	Action   string         `json:"action"`
+	Method   string         `json:"method"`
+	Data     map[string]any `json:"data"`
 }
 
-func NewEventListener(on OnEvent, f func(d *Dispatch) Component, o ...Opt[EventListener]) EventListener {
+// TODO update this to regular dispatch func
+// Creates a new EventListener with OnEvent for component with ID that triggers function f
+func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
 	id := uuid.New().String()
 	el := EventListener{
-		ID: id,
-		On: on,
-	}
-	for _, opt := range o {
-		opt(&el)
+		TargetID: f.id,
+		Handler:  h,
+		ID:       id,
+		On:       on,
 	}
 
-	evtHandlers.add(id, f)
 	evtListeners.Add(id, el)
 	return el
 }
 
-func WithAction(action string) Opt[EventListener] {
-	return func(e *EventListener) {
-		e.Action = action
-	}
-}
-
-func WithMethod(method string) Opt[EventListener] {
-	return func(e *EventListener) {
-		e.Method = method
-	}
-}
-
-func (e EventListener) String() string {
-	b, err := json.Marshal(e)
-	if err != nil {
-		return ""
-	}
-	return string(b)
-}
+// Store and retrieve event listeners
 
 type eventListeners struct {
 	mu sync.Mutex
@@ -190,4 +153,14 @@ func (e *eventListeners) Every() (el []EventListener) {
 		el = append(el, e)
 	}
 	return
+}
+
+func UnmarshalEventData[T any](e EventListener) (T, error) {
+	var t T
+	b, err := json.Marshal(e.Data)
+	if err != nil {
+		return t, err
+	}
+	err = json.Unmarshal(b, &t)
+	return t, err
 }

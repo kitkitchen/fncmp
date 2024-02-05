@@ -1,50 +1,65 @@
-let functions: Functions;
-let _funs: Functions;
+// let functions: DispatchFunctions;
 let conn_id: string | undefined = undefined;
 let base_url: string | undefined = undefined;
 let verbose = false;
 
-type Functions = {
-    [key: string]: (data: any) => any;
+type DispatchFunctions = {
+    [key: string]: (data: Dispatch) => Dispatch | void;
 };
 
-type FnRequest<T> = {
+type FnCustom = {
     function: string;
-    data: T;
-};
-
-type EventRequest = {
-    conn_id: string;
-    target_id: string;
-    event: {
-        on: string;
-        action: string;
-        method: string;
-        id: string;
-    };
     data: Object;
 };
 
-type Dispatch = {
-    function: "render" | "redirect" | "event" | "error" | "_connect";
-    conn_id: string;
+type FnEventListener = {
+    id: string;
     target_id: string;
-    inner: boolean;
+    on: string;
     action: string;
     method: string;
-    event: {
-        on: string;
-        action: string;
-        method: string;
-        id: string;
-    };
-    data: string;
+    form_data: string;
+    data: Object;
+};
+
+type FnRender = {
+    target_id: string;
+    tag: string;
+    inner: boolean;
+    outer: boolean;
+    append: boolean;
+    prepend: boolean;
+    html: string;
+    event_listeners: FnEventListener[];
+};
+
+type FnRedirect = {
+    url: string;
+};
+
+type FnError = {
     message: string;
 };
 
-class FnSocketAPI {
+type Dispatch = {
+    function: "render" | "redirect" | "event" | "error" | "custom";
+    id: string;
+    key: string;
+    conn_id: string;
+    handler_id: string;
+    action: string;
+    label: string;
+    event: FnEventListener;
+    render: FnRender;
+    redirect: FnRedirect;
+    custom: FnCustom;
+    error: FnError;
+};
+
+class Socket {
     private ws: WebSocket | null = null;
     private addr: string | undefined = undefined;
+    private key: string | undefined = undefined;
 
     constructor(addr: string) {
         if (this.addr) {
@@ -54,137 +69,191 @@ class FnSocketAPI {
             throw new Error("ws: no address provided...");
         }
         this.addr = addr;
-        _funs = this.funs;
         this.connect(addr);
     }
 
     private connect(addr: string) {
+        // let key = "";
         try {
             this.ws = new WebSocket(addr);
         } catch {
             throw new Error("ws: failed to connect to server...");
         }
+
         this.ws.onopen = function () {};
         this.ws.onclose = function () {};
-        this.ws.onerror = function (e) {
-            throw new Error("ws: " + e);
-        };
+        this.ws.onerror = function (e) {};
 
         this.ws.onmessage = function (event) {
             let d = JSON.parse(event.data) as Dispatch;
-            console.log(d);
-            if (!d) {
-                throw new Error("ws: no data received in request...");
-            }
-            if (d.function == "_connect") {
-                // Reject multiple connections
-                if (conn_id) {
-                    return;
-                }
-                // Initialize connection
-                conn_id = d.conn_id;
-            } else {
-                if (!d.function) {
-                    console.log("ws: error no function provided in request...");
-                    return;
-                }
-                // Parse function execution
-                _funs[d.function](d);
-            }
+            // if(d.key != key) {
+            //     throw new Error("ws: invalid key...");
+            // }
+
+            api.Process(this, d);
         };
     }
+}
 
-    funs: Functions = {
-        _render: (data: { id: string; inner: boolean; html: string }) => {
-            const elem = document.getElementById(data.id);
-            if (!elem) {
-                return {
-                    error: true,
-                    message: "element not found: " + data,
-                };
+class API {
+    private ws: WebSocket | null = null;
+    constructor() {
+        console.log("API: initialized...");
+    }
+
+    // Process is the entry point for all api calls via the websocket
+    public Process(ws: WebSocket, d: Dispatch) {
+        if (!this.ws) {
+            this.ws = ws;
+        }
+        switch (d.function) {
+            case "redirect":
+                window.location.href = d.redirect.url;
+                return;
+            case "custom":
+                this.Dispatch(window[d.custom.function](d.custom.data));
+                return;
+            case "render":
+                this.Dispatch(this.funs.render(d));
+            default:
+                // this.Error(d, "invalid function: " + d.function);
+                break;
+        }
+    }
+
+    private Dispatch = (data: Dispatch | void) => {
+        if (!data) return;
+        if (!this.ws) {
+            throw new Error("ws: not connected to server...");
+        }
+        this.ws.send(JSON.stringify(data));
+    };
+
+    private funs: DispatchFunctions = {
+        render: (d: Dispatch) => {
+            console.log("RENDER:");
+            console.log(d);
+            let elem: Element | null = null;
+            const parsed = new DOMParser().parseFromString(
+                d.render.html,
+                "text/html"
+            ).firstChild as HTMLElement;
+            const html = parsed.getElementsByTagName("body")[0].innerHTML;
+
+            // Select element to render to
+            if (d.render.tag != "") {
+                elem = this.utils.getElementsByTagName(d.render.tag)[0];
+                if (!elem) {
+                    return this.Error(
+                        d,
+                        "element with tag not found: " + d.render.tag
+                    );
+                }
+            } else if (d.render.target_id != "") {
+                elem = this.utils.getElementById(d.render.target_id);
+                if (!elem) {
+                    return this.Error(
+                        d,
+                        "element with target_id not found: " +
+                            d.render.target_id
+                    );
+                }
+            } else {
+                return this.Error(d, "no target or tag specified");
             }
 
-            elem.innerHTML = data.html;
-            // if (data.inner) {
-            //     elem.innerHTML = data.html;
-            // } else {
-            //     elem.outerHTML = data.html;
-            // }
-            console.log(data.html);
-            const elems = elem.querySelectorAll("[fc]");
-            console.log(elems);
-            elems.forEach((elem: Element) => {
-                console.log("ELEM");
-                console.log(elem);
+            // Render element
+            if (d.render.inner) {
+                elem.innerHTML = html;
+            }
+            if (d.render.outer) {
+                elem.outerHTML = html;
+            }
+            if (d.render.append) {
+                const div = document.createElement("div");
+                div.innerHTML = html;
+                elem.appendChild(div);
+            }
+            if(d.render.prepend) {
+                elem.prepend(html);
+            }
+
+            this.Dispatch(this.utils.addEventListeners(d));
+            return;
+        },
+    };
+
+    private utils = {
+        // Element selectors
+        parseFormData: (ev: Event, d: Dispatch) => {
+            const form = ev.target as HTMLFormElement;
+            const formData = new FormData(form);
+            d.event.data = Object.fromEntries(formData.entries());
+            return d;
+        },
+        getElementById: (id: string): HTMLElement =>
+            document.getElementById(id),
+        getElementsByTagName: (tag: string) =>
+            document.getElementsByTagName(tag),
+        getElementByClassName: (className: string) =>
+            document.getElementsByClassName(className),
+        getElementByAttribute: (attribute: string) =>
+            document.querySelectorAll(`[${attribute}]`),
+        trackTouch: (elem: HTMLElement) => {
+            elem.addEventListener("touchstart", (ev) => {
+                //TODO: event object comes back as touch specific
+                ev.preventDefault();
+                elem.classList.add("touch");
+                // send data to api
+            });
+            elem.addEventListener("touchend", (ev) => {
+                elem.classList.remove("touch");
+            });
+        },
+        addEventListeners: (d: Dispatch) => {
+            if (!d.render.event_listeners) return;
+            // Event listeners
+            d.render.event_listeners.forEach((listener: FnEventListener) => {
+                console.log("listener: " + listener);
+                let elem = document.getElementById(listener.target_id);
                 if (!elem) {
+                    console.log("elem not found");
+                    this.Error(d, "element not found");
                     return;
                 }
-                const _fc = elem.getAttribute("fc");
-                console.log("_FC ATTRIBUTE");
-                console.log(_fc);
-                const array = JSON.parse(_fc);
-                // Parse attributes
-                array.forEach((thisFc: any) => {
-                    const fc = thisFc as {
-                        on: string;
-                        action: string;
-                        method: "POST";
-                        id: string;
-                    };
-                    elem.addEventListener(fc.on, (ev) => {
-                        ev.preventDefault();
-                        console.log("event: " + fc.on);
-                        let data: any;
-                        if (fc.on == "submit") {
-                            const form = ev.target as HTMLFormElement;
-                            const formData = new FormData(form);
-                            data = Object.fromEntries(formData.entries());
-                            console.log(data)
-                        }
-
-                        let req: Dispatch = {
-                            function: "event",
-                            conn_id: conn_id,
-                            target_id: elem.id,
-                            inner: false,
-                            action: fc.action,
-                            method: fc.method,
-                            event: fc,
-                            data: JSON.stringify(data),
-                            message: "event dispatched",
-                        };
-                        console.log(req)
-                        // Send event to server
-                        this.ws.send(JSON.stringify(req));
-                    });
+                if (elem.firstChild) {
+                    console.log("elem has children");
+                    elem = elem.firstChild as HTMLElement;
+                } else {
+                    console.log("elem has no children");
+                }
+                console.log("elem with listener: " + elem);
+                elem.addEventListener(listener.on, (ev) => {
+                    ev.preventDefault();
+                    console.log("event: " + listener.on);
+                    d.function = "event";
+                    d.event = listener;
+                    switch (listener.on) {
+                        case "submit":
+                            d = this.utils.parseFormData(ev, d);
+                            break;
+                        default:
+                            break;
+                    }
+                    console.log("EVENT:");
+                    console.log(d);
+                    this.Dispatch(d);
                 });
             });
         },
-        redirect: (e: Dispatch) => {
-            let req: Dispatch = {
-                function: "redirect",
-                conn_id: conn_id,
-                target_id: e.target_id,
-                inner: false,
-                action: e.action,
-                method: e.method,
-                event: e.event,
-                data: e.data,
-                message: e.message,
-            };
-            // Send event to server
-            this.ws.send(JSON.stringify(req));
-        },
-        render: (e: Dispatch) => {
-            console.log(e);
-            // call websocket for render instructions
-            this.funs._render({
-                id: e.target_id,
-                inner: e.inner,
-                html: e.data as string,
-            });
-        },
+    };
+
+    private Error = (d: Dispatch, message: string) => {
+        d.function = "error";
+        d.error.message = message;
+        this.Dispatch(d);
     };
 }
 
-const api = new FnSocketAPI("ws://localhost%s/%s/%s");
+new Socket("ws://localhost%s%s");
+const api = new API();

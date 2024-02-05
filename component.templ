@@ -1,18 +1,16 @@
 package main
 
-templ Nil() {
-	<div></div>
+templ Page(c ...Component) {
+	<div id="page">
+		for _, comp := range c {
+			@comp
+		}
+	</div>
 }
 
 script Test() {
 	console.log("Hello, world!")
 }
-
-// templ fC(fc FnComponent) {
-// 	<div id={ fc.ID } fc={ fc.ListenerStrings() }>
-// 		@fc
-// 	</div>
-// }
 
 templ LoginForm() {
 	<form name="login-form">

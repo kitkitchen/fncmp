@@ -31,6 +31,7 @@ type (
 	Conn struct {
 		websocket *websocket.Conn
 		ID        string
+		HandlerID string
 		Messages  chan []byte
 	}
 	ConnectionInfo struct {
@@ -44,7 +45,7 @@ type (
 
 // NewConn upgrades an http connection to a websocket connection and returns a Conn
 // or an error if the upgrade fails.
-func NewConn(w http.ResponseWriter, r *http.Request, ID string) (*Conn, error) {
+func NewConn(w http.ResponseWriter, r *http.Request, handlerID string, ID string) (*Conn, error) {
 	connPool.mu.Lock()
 	defer connPool.mu.Unlock()
 
@@ -62,9 +63,10 @@ func NewConn(w http.ResponseWriter, r *http.Request, ID string) (*Conn, error) {
 	c := &Conn{
 		websocket: websocket,
 		ID:        ID,
+		HandlerID: handlerID,
 		Messages:  make(chan []byte, 16),
 	}
-	connPool.pool[ID] = c
+	connPool.pool[c.ID] = c
 	return c, nil
 }
 
@@ -81,10 +83,11 @@ func (c *Conn) close() error {
 	return nil
 }
 
-// Listen listens for messages on the Conn's Messages channel and writes them to the websocket connection.
 func (c *Conn) listen() {
 	go func(c *Conn) {
 		defer c.close()
+		// Listen for messages on the Conn's Messages channel
+		var dispatch Dispatch
 		for {
 			_, message, err := c.websocket.ReadMessage()
 			if err != nil {
@@ -99,18 +102,22 @@ func (c *Conn) listen() {
 				close(c.Messages)
 				break
 			}
-			d := Dispatch{}
-			// marshall the message into a Dispatch
-			err = json.Unmarshal(message, &d)
+			// Parse dispatch from websocket message
+			err = json.Unmarshal(message, &dispatch)
 			if err != nil {
 				log.Printf("error: %v", err)
 				continue
 			}
-			if dispatcher != nil {
-				dispatcher.Dispatch(&d)
+			// Get handler from handler pool
+			handler, ok := handlers[dispatch.HandlerID]
+			if !ok {
+				log.Printf("error: handler '%s' not found", dispatch.HandlerID)
 				continue
 			}
-			log.Println("fncmp: no dispatcher registered")
+			// Set Conn on dispatch
+			dispatch.Conn = c
+			// Dispatch to handler
+			handler.in <- dispatch
 		}
 	}(c)
 

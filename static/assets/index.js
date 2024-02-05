@@ -1,96 +1,12 @@
-let functions;
-let _funs;
+// let functions: DispatchFunctions;
 let conn_id = undefined;
 let base_url = undefined;
 let verbose = false;
-class FnSocketAPI {
+class Socket {
     constructor(addr) {
         this.ws = null;
         this.addr = undefined;
-        this.funs = {
-            _render: (data) => {
-                const elem = document.getElementById(data.id);
-                if (!elem) {
-                    return {
-                        error: true,
-                        message: "element not found: " + data,
-                    };
-                }
-                elem.innerHTML = data.html;
-                // if (data.inner) {
-                //     elem.innerHTML = data.html;
-                // } else {
-                //     elem.outerHTML = data.html;
-                // }
-                console.log(data.html);
-                const elems = elem.querySelectorAll("[fc]");
-                console.log(elems);
-                elems.forEach((elem) => {
-                    console.log("ELEM");
-                    console.log(elem);
-                    if (!elem) {
-                        return;
-                    }
-                    const _fc = elem.getAttribute("fc");
-                    console.log("_FC ATTRIBUTE");
-                    console.log(_fc);
-                    const array = JSON.parse(_fc);
-                    // Parse attributes
-                    array.forEach((thisFc) => {
-                        const fc = thisFc;
-                        elem.addEventListener(fc.on, (ev) => {
-                            ev.preventDefault();
-                            console.log("event: " + fc.on);
-                            let data;
-                            if (fc.on == "submit") {
-                                const form = ev.target;
-                                const formData = new FormData(form);
-                                data = Object.fromEntries(formData.entries());
-                                console.log(data);
-                            }
-                            let req = {
-                                function: "event",
-                                conn_id: conn_id,
-                                target_id: elem.id,
-                                inner: false,
-                                action: fc.action,
-                                method: fc.method,
-                                event: fc,
-                                data: JSON.stringify(data),
-                                message: "event dispatched",
-                            };
-                            console.log(req);
-                            // Send event to server
-                            this.ws.send(JSON.stringify(req));
-                        });
-                    });
-                });
-            },
-            redirect: (e) => {
-                let req = {
-                    function: "redirect",
-                    conn_id: conn_id,
-                    target_id: e.target_id,
-                    inner: false,
-                    action: e.action,
-                    method: e.method,
-                    event: e.event,
-                    data: e.data,
-                    message: e.message,
-                };
-                // Send event to server
-                this.ws.send(JSON.stringify(req));
-            },
-            render: (e) => {
-                console.log(e);
-                // call websocket for render instructions
-                this.funs._render({
-                    id: e.target_id,
-                    inner: e.inner,
-                    html: e.data,
-                });
-            },
-        };
+        this.key = undefined;
         if (this.addr) {
             throw new Error("ws: already connected to server...");
         }
@@ -98,10 +14,10 @@ class FnSocketAPI {
             throw new Error("ws: no address provided...");
         }
         this.addr = addr;
-        _funs = this.funs;
         this.connect(addr);
     }
     connect(addr) {
+        // let key = "";
         try {
             this.ws = new WebSocket(addr);
         }
@@ -110,32 +26,158 @@ class FnSocketAPI {
         }
         this.ws.onopen = function () { };
         this.ws.onclose = function () { };
-        this.ws.onerror = function (e) {
-            throw new Error("ws: " + e);
-        };
+        this.ws.onerror = function (e) { };
         this.ws.onmessage = function (event) {
             let d = JSON.parse(event.data);
-            console.log(d);
-            if (!d) {
-                throw new Error("ws: no data received in request...");
-            }
-            if (d.function == "_connect") {
-                // Reject multiple connections
-                if (conn_id) {
-                    return;
-                }
-                // Initialize connection
-                conn_id = d.conn_id;
-            }
-            else {
-                if (!d.function) {
-                    console.log("ws: error no function provided in request...");
-                    return;
-                }
-                // Parse function execution
-                _funs[d.function](d);
-            }
+            // if(d.key != key) {
+            //     throw new Error("ws: invalid key...");
+            // }
+            api.Process(this, d);
         };
     }
 }
-const api = new FnSocketAPI("ws://localhost%s/%s/%s");
+class API {
+    constructor() {
+        this.ws = null;
+        this.Dispatch = (data) => {
+            if (!data)
+                return;
+            if (!this.ws) {
+                throw new Error("ws: not connected to server...");
+            }
+            this.ws.send(JSON.stringify(data));
+        };
+        this.funs = {
+            render: (d) => {
+                console.log("RENDER:");
+                console.log(d);
+                let elem = null;
+                const parsed = new DOMParser().parseFromString(d.render.html, "text/html").firstChild;
+                const html = parsed.getElementsByTagName("body")[0].innerHTML;
+                // Select element to render to
+                if (d.render.tag != "") {
+                    elem = this.utils.getElementsByTagName(d.render.tag)[0];
+                    if (!elem) {
+                        return this.Error(d, "element with tag not found: " + d.render.tag);
+                    }
+                }
+                else if (d.render.target_id != "") {
+                    elem = this.utils.getElementById(d.render.target_id);
+                    if (!elem) {
+                        return this.Error(d, "element with target_id not found: " +
+                            d.render.target_id);
+                    }
+                }
+                else {
+                    return this.Error(d, "no target or tag specified");
+                }
+                // Render element
+                if (d.render.inner) {
+                    elem.innerHTML = html;
+                }
+                if (d.render.outer) {
+                    elem.outerHTML = html;
+                }
+                if (d.render.append) {
+                    const div = document.createElement("div");
+                    div.innerHTML = html;
+                    elem.appendChild(div);
+                }
+                if (d.render.prepend) {
+                    elem.prepend(html);
+                }
+                this.Dispatch(this.utils.addEventListeners(d));
+                return;
+            },
+        };
+        this.utils = {
+            // Element selectors
+            parseFormData: (ev, d) => {
+                const form = ev.target;
+                const formData = new FormData(form);
+                d.event.data = Object.fromEntries(formData.entries());
+                return d;
+            },
+            getElementById: (id) => document.getElementById(id),
+            getElementsByTagName: (tag) => document.getElementsByTagName(tag),
+            getElementByClassName: (className) => document.getElementsByClassName(className),
+            getElementByAttribute: (attribute) => document.querySelectorAll(`[${attribute}]`),
+            trackTouch: (elem) => {
+                elem.addEventListener("touchstart", (ev) => {
+                    //TODO: event object comes back as touch specific
+                    ev.preventDefault();
+                    elem.classList.add("touch");
+                    // send data to api
+                });
+                elem.addEventListener("touchend", (ev) => {
+                    elem.classList.remove("touch");
+                });
+            },
+            addEventListeners: (d) => {
+                if (!d.render.event_listeners)
+                    return;
+                // Event listeners
+                d.render.event_listeners.forEach((listener) => {
+                    console.log("listener: " + listener);
+                    let elem = document.getElementById(listener.target_id);
+                    if (!elem) {
+                        console.log("elem not found");
+                        this.Error(d, "element not found");
+                        return;
+                    }
+                    if (elem.firstChild) {
+                        console.log("elem has children");
+                        elem = elem.firstChild;
+                    }
+                    else {
+                        console.log("elem has no children");
+                    }
+                    console.log("elem with listener: " + elem);
+                    elem.addEventListener(listener.on, (ev) => {
+                        ev.preventDefault();
+                        console.log("event: " + listener.on);
+                        d.function = "event";
+                        d.event = listener;
+                        switch (listener.on) {
+                            case "submit":
+                                d = this.utils.parseFormData(ev, d);
+                                break;
+                            default:
+                                break;
+                        }
+                        console.log("EVENT:");
+                        console.log(d);
+                        this.Dispatch(d);
+                    });
+                });
+            },
+        };
+        this.Error = (d, message) => {
+            d.function = "error";
+            d.error.message = message;
+            this.Dispatch(d);
+        };
+        console.log("API: initialized...");
+    }
+    // Process is the entry point for all api calls via the websocket
+    Process(ws, d) {
+        if (!this.ws) {
+            this.ws = ws;
+        }
+        switch (d.function) {
+            case "redirect":
+                window.location.href = d.redirect.url;
+                return;
+            case "custom":
+                this.Dispatch(window[d.custom.function](d.custom.data));
+                return;
+            case "render":
+                this.Dispatch(this.funs.render(d));
+            default:
+                // this.Error(d, "invalid function: " + d.function);
+                break;
+        }
+    }
+}
+new Socket("ws://localhost%s%s");
+const api = new API();

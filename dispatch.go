@@ -1,71 +1,69 @@
 package main
 
-import (
-	"context"
-	"encoding/json"
-	"log"
+type FunctionName string
+
+const (
+	Render   FunctionName = "render"
+	Redirect FunctionName = "redirect"
+	Event    FunctionName = "event"
+	Custom   FunctionName = "custom"
+	Error    FunctionName = "error"
 )
 
-// For passing to render interface
-type ContextWithDispatch struct {
-	context.Context
-	*Dispatch
+type Tag string
+
+const (
+	HTMLTag Tag = "html"
+	Head    Tag = "head"
+	Body    Tag = "body"
+)
+
+type (
+	FnRender struct {
+		TargetID       string          `json:"target_id"`
+		Tag            Tag             `json:"tag"`
+		Inner          bool            `json:"inner"`
+		Outer          bool            `json:"outer"`
+		Append         bool            `json:"append"`
+		Prepend        bool            `json:"prepend"`
+		HTML           string          `json:"html"`
+		EventListeners []EventListener `json:"event_listeners"`
+	}
+	FnRedirect struct {
+		URL string `json:"url"`
+	}
+	FnCustom struct {
+		Function string `json:"function"`
+		Data     any    `json:"data"`
+	}
+	FnError struct {
+		Message string `json:"message"`
+	}
+)
+
+func (fn FnError) Error() string {
+	return fn.Message
 }
 
-// TODO: Function component creates a new dispatch, it then reads the html from the component render function
-// and wraps it in a div with the component ID. It then sends the dispatch to the client.
+func newDispatch(key string) *Dispatch {
+	return &Dispatch{
+		Key: key,
+	}
+}
 
-// TODO:
 type Dispatch struct {
-	Function FunctionName `json:"function"`
-	// todo: mask connID
-	ConnID   string `json:"conn_id"`
-	TargetID string `json:"target_id"`
-	Inner    bool   `json:"inner"`
-	Action   string `json:"action"`
-	Method   string `json:"method"`
-	Event    struct {
-		On     string `json:"on"`
-		Action string `json:"action"`
-		Method string `json:"method"`
-		ID     string `json:"id"`
-	} `json:"event"`
-	Data    string `json:"data"`
-	Message string `json:"message"`
-}
-
-func (d Dispatch) IsRender() bool {
-	return d.Function == Render
-}
-
-func (d Dispatch) IsRedirect() bool {
-	return d.Function == Redirect
-}
-
-func (d Dispatch) IsEvent() bool {
-	return d.Function == Event
-}
-
-func (d Dispatch) IsError() bool {
-	return d.Function == Error
-}
-
-func (d *Dispatch) send() {
-	conn, ok := connPool.Get(d.ConnID)
-	if !ok {
-		panic("fncmp: error retrieving connection to DOM: " + d.ConnID)
-	}
-	b, err := json.Marshal(d)
-	if err != nil {
-		log.Println(err)
-	}
-	conn.Publish(b)
-}
-
-func (d *Dispatch) Marshall() ([]byte, error) {
-	b, err := json.Marshal(d)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
+	buf        []byte        `json:"-"`
+	Conn       *Conn         `json:"-"`
+	ID         string        `json:"id"`
+	Key        string        `json:"key"`
+	ConnID     string        `json:"conn_id"`
+	HandlerID  string        `json:"handler_id"`
+	Action     string        `json:"action"`
+	Label      string        `json:"label"`
+	Function   FunctionName  `json:"function"`
+	FnEvent    EventListener `json:"event"`
+	FnRender   FnRender      `json:"render"`
+	FnRedirect FnRedirect    `json:"redirect"`
+	FnCustom   FnCustom      `json:"custom"`
+	FnError    FnError       `json:"error"`
 }
