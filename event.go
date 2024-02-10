@@ -18,6 +18,7 @@ const (
 	OnBlur               OnEvent = "blur"
 	OnCanPlay            OnEvent = "canplay"
 	OnCanPlayThrough     OnEvent = "canplaythrough"
+	OnChange             OnEvent = "change"
 	OnChangeCapture      OnEvent = "changecapture"
 	OnClick              OnEvent = "click"
 	OnCompositionEnd     OnEvent = "compositionend"
@@ -94,13 +95,13 @@ const (
 )
 
 type EventListener struct {
-	ID       string         `json:"id"`
-	TargetID string         `json:"target_id"`
-	Handler  HandleFn       `json:"-"`
-	On       OnEvent        `json:"on"`
-	Action   string         `json:"action"`
-	Method   string         `json:"method"`
-	Data     map[string]any `json:"data"`
+	ID       string   `json:"id"`
+	TargetID string   `json:"target_id"`
+	Handler  HandleFn `json:"-"`
+	On       OnEvent  `json:"on"`
+	Action   string   `json:"action"`
+	Method   string   `json:"method"`
+	Data     any      `json:"data"`
 }
 
 // TODO update this to regular dispatch func
@@ -163,4 +164,155 @@ func UnmarshalEventData[T any](e EventListener) (T, error) {
 	}
 	err = json.Unmarshal(b, &t)
 	return t, err
+}
+
+// Event data types
+type PointerEvent struct {
+	IsTrusted        bool        `json:"isTrusted"`
+	AltKey           bool        `json:"altKey"`
+	Bubbles          bool        `json:"bubbles"`
+	Button           int         `json:"button"`
+	Buttons          int         `json:"buttons"`
+	Cancelable       bool        `json:"cancelable"`
+	ClientX          int         `json:"clientX"`
+	ClientY          int         `json:"clientY"`
+	Composed         bool        `json:"composed"`
+	CtrlKey          bool        `json:"ctrlKey"`
+	CurrentTarget    EventTarget `json:"currentTarget"`
+	DefaultPrevented bool        `json:"defaultPrevented"`
+	Detail           int         `json:"detail"`
+	EventPhase       int         `json:"eventPhase"`
+	Height           int         `json:"height"`
+	IsPrimary        bool        `json:"isPrimary"`
+	MetaKey          bool        `json:"metaKey"`
+	MovementX        int         `json:"movementX"`
+	MovementY        int         `json:"movementY"`
+	OffsetX          int         `json:"offsetX"`
+	OffsetY          int         `json:"offsetY"`
+	PageX            int         `json:"pageX"`
+	PageY            int         `json:"pageY"`
+	PointerId        int         `json:"pointerId"`
+	PointerType      string      `json:"pointerType"`
+	Pressure         int         `json:"pressure"`
+	RelatedTarget    EventTarget `json:"relatedTarget"`
+}
+
+type TouchEvent struct {
+	ChangedTouches []Touch `json:"changedTouches"`
+	TargetTouches  []Touch `json:"targetTouches"`
+	Touches        []Touch `json:"touches"`
+	LayerX         int     `json:"layerX"`
+	LayerY         int     `json:"layerY"`
+	PageX          int     `json:"pageX"`
+	PageY          int     `json:"pageY"`
+}
+
+type Touch struct {
+	ClientX       int         `json:"clientX"`
+	ClientY       int         `json:"clientY"`
+	Identifier    int         `json:"identifier"`
+	PageX         int         `json:"pageX"`
+	PageY         int         `json:"pageY"`
+	RadiusX       float64     `json:"radiusX"`
+	RadiusY       float64     `json:"radiusY"`
+	RotationAngle int         `json:"rotationAngle"`
+	ScreenX       int         `json:"screenX"`
+	ScreenY       int         `json:"screenY"`
+	Target        EventTarget `json:"target"`
+}
+
+type DragEvent struct {
+	IsTrusted        bool        `json:"isTrusted"`
+	AltKey           bool        `json:"altKey"`
+	Bubbles          bool        `json:"bubbles"`
+	Button           int         `json:"button"`
+	Buttons          int         `json:"buttons"`
+	Cancelable       bool        `json:"cancelable"`
+	ClientX          int         `json:"clientX"`
+	ClientY          int         `json:"clientY"`
+	Composed         bool        `json:"composed"`
+	CtrlKey          bool        `json:"ctrlKey"`
+	CurrentTarget    EventTarget `json:"currentTarget"`
+	DefaultPrevented bool        `json:"defaultPrevented"`
+	Detail           int         `json:"detail"`
+	EventPhase       int         `json:"eventPhase"`
+	MetaKey          bool        `json:"metaKey"`
+	MovementX        int         `json:"movementX"`
+	MovementY        int         `json:"movementY"`
+	OffsetX          int         `json:"offsetX"`
+	OffsetY          int         `json:"offsetY"`
+	PageX            int         `json:"pageX"`
+	PageY            int         `json:"pageY"`
+	RelatedTarget    EventTarget `json:"relatedTarget"`
+}
+
+type MouseEvent struct {
+	IsTrusted        bool        `json:"isTrusted"`
+	AltKey           bool        `json:"altKey"`
+	Bubbles          bool        `json:"bubbles"`
+	Button           int         `json:"button"`
+	Buttons          int         `json:"buttons"`
+	Cancelable       bool        `json:"cancelable"`
+	ClientX          int         `json:"clientX"`
+	ClientY          int         `json:"clientY"`
+	Composed         bool        `json:"composed"`
+	CtrlKey          bool        `json:"ctrlKey"`
+	CurrentTarget    EventTarget `json:"currentTarget"`
+	DefaultPrevented bool        `json:"defaultPrevented"`
+	Detail           int         `json:"detail"`
+	EventPhase       int         `json:"eventPhase"`
+	MetaKey          bool        `json:"metaKey"`
+	MovementX        int         `json:"movementX"`
+	MovementY        int         `json:"movementY"`
+	OffsetX          int         `json:"offsetX"`
+	OffsetY          int         `json:"offsetY"`
+	PageX            int         `json:"pageX"`
+	PageY            int         `json:"pageY"`
+	RelatedTarget    EventTarget `json:"relatedTarget"`
+}
+
+type KeyboardEvent struct {
+	IsTrusted        bool        `json:"isTrusted"`
+	AltKey           bool        `json:"altKey"`
+	Bubbles          bool        `json:"bubbles"`
+	Cancelable       bool        `json:"cancelable"`
+	Code             string      `json:"code"`
+	Composed         bool        `json:"composed"`
+	CtrlKey          bool        `json:"ctrlKey"`
+	CurrentTarget    EventTarget `json:"currentTarget"`
+	DefaultPrevented bool        `json:"defaultPrevented"`
+	Detail           int         `json:"detail"`
+	EventPhase       int         `json:"eventPhase"`
+	IsComposing      bool        `json:"isComposing"`
+	Key              string      `json:"key"`
+	Location         int         `json:"location"`
+	MetaKey          bool        `json:"metaKey"`
+	Repeat           bool        `json:"repeat"`
+	ShiftKey         bool        `json:"shiftKey"`
+}
+
+type EventTarget struct {
+	ID         string   `json:"id"`
+	ClassList  []string `json:"classList"`
+	TagName    string   `json:"tagName"`
+	InnerHTML  string   `json:"innerHTML"`
+	OuterHTML  string   `json:"outerHTML"`
+	Value      string   `json:"value"`
+	Checked    bool     `json:"checked"`
+	Disabled   bool     `json:"disabled"`
+	Hidden     bool     `json:"hidden"`
+	Style      string   `json:"style"`
+	Attributes []string `json:"attributes"`
+	Dataset    []string `json:"dataset"`
+}
+
+type FormDataEvent struct {
+	IsTrusted        bool           `json:"isTrusted"`
+	Bubbles          bool           `json:"bubbles"`
+	Cancelable       bool           `json:"cancelable"`
+	Composed         bool           `json:"composed"`
+	CurrentTarget    EventTarget    `json:"currentTarget"`
+	DefaultPrevented bool           `json:"defaultPrevented"`
+	EventPhase       int            `json:"eventPhase"`
+	FormData         map[string]any `json:"formData"`
 }

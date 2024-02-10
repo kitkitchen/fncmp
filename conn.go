@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -51,8 +50,9 @@ func NewConn(w http.ResponseWriter, r *http.Request, handlerID string, ID string
 
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
-			host := strings.Split(r.Host, ":")[0]
-			return host == "localhost"
+			return true
+			// host := strings.Split(r.Host, ":")[0]
+			// return host == "localhost"
 		},
 	}
 	websocket, err := upgrader.Upgrade(w, r, nil)

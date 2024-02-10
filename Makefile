@@ -1,3 +1,5 @@
+.PHONY: templ_files
+
 make:
 	go run .
 
@@ -6,6 +8,9 @@ minify:
 
 script:
 	tsc -watch
+
+tailwind:
+	./tailwindcss build -o static/assets/stylesheets/tailwind.min.css
 
 sass:
 	sass --watch static/assets/sass:static/assets/stylesheets

@@ -1,5 +1,7 @@
 package main
 
+import "encoding/json"
+
 type FunctionName string
 
 const (
@@ -66,4 +68,12 @@ type Dispatch struct {
 	FnRedirect FnRedirect    `json:"redirect"`
 	FnCustom   FnCustom      `json:"custom"`
 	FnError    FnError       `json:"error"`
+}
+
+func (f *FnRender) ListenerStrings() string {
+	b, err := json.Marshal(f.EventListeners)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }

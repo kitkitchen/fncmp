@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
 )
 
+// TODO: use mutex to lock handlers map
 var handlers = make(map[string]Handler)
 
 type Handler struct {
@@ -23,18 +25,16 @@ type Handler struct {
 	handlesHTTP map[string]http.HandlerFunc
 }
 
-func NewHandler(port string, h http.Handler) *Handler {
+func NewHandler(port string) *Handler {
 	handler := Handler{
 		id:          uuid.New().String(),
 		port:        port,
-		Handler:     h,
 		in:          make(chan Dispatch, 1028),
 		out:         make(chan FnComponent, 1028),
 		handlesFn:   make(map[string]HandleFn),
 		handlesHTTP: make(map[string]http.HandlerFunc),
 	}
 	handlers[handler.id] = handler
-	handler.listen()
 	return &handler
 }
 
@@ -86,6 +86,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	script := js(h.port, socketPath)
 	writer.Write([]byte("<script>" + script + "</script>"))
+	// writer.Write([]byte("<body></body>"))
 	if h.handlesHTTP[r.URL.Path] != nil {
 		// FIXME: This is probably where bad url paths are getting stuck
 		MiddleWareDispatch(h.handlesHTTP[r.URL.Path]).ServeHTTP(&writer, r)
@@ -113,7 +114,7 @@ func (h *Handler) HandleWS(w http.ResponseWriter, r *http.Request, id string, pa
 	}
 
 	fn := handler(r.Context()).WithConnID(conn.ID).
-		WithRender().WithTag("body").InnerHTML()
+		WithRender().SwapTagInner(Body)
 	fn.dispatch.Conn = conn
 	fn.dispatch.HandlerID = h.id
 	h.out <- fn
@@ -155,19 +156,23 @@ func (h Handler) Render(fn FnComponent) {
 	var data Writer
 	fn.Render(context.Background(), &data)
 	fn.dispatch.FnRender.HTML = SanitizeHTML(string(data.buf))
-	b, err := json.Marshal(fn.dispatch)
-	if err != nil {
-		log.Println(err)
-		fn.dispatch.FnError.Message = err.Error()
-		h.Error(*fn.dispatch)
-		return
-	}
-	fn.dispatch.Conn.Publish(b)
+	h.MarshalAndPublish(*fn.dispatch)
 }
 
 func (h Handler) Redirect(fn FnComponent) {
 	fmt.Println(fn)
-	// Handler redirect
+	h.MarshalAndPublish(*fn.dispatch)
+}
+
+func (h Handler) MarshalAndPublish(d Dispatch) {
+	b, err := json.Marshal(d)
+	if err != nil {
+		log.Println(err)
+		d.FnError.Message = err.Error()
+		h.Error(d)
+		return
+	}
+	d.Conn.Publish(b)
 }
 
 func (h Handler) Event(d Dispatch) {
@@ -179,14 +184,8 @@ func (h Handler) Event(d Dispatch) {
 	}
 	listener.Data = d.FnEvent.Data
 	response := listener.Handler(context.WithValue(context.Background(), EventKey, listener))
-	// response.id = listener.TargetID
-	//TODO: Ensure conn is always attached.
-	// could be reassigned elsewhere
 	response.dispatch.Conn = d.Conn
 	response.dispatch.HandlerID = d.HandlerID
-	// response.dispatch.ConnID = d.ConnID
-	// response.dispatch.FnRender.TargetID = d.FnEvent.TargetID
-	// response.dispatch.FnRender.EventListeners = []EventListener{}
 	h.out <- response
 }
 
@@ -208,6 +207,85 @@ func MiddleWareDispatch(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get route and pass to handler with information
+		next(w, r)
+	}
+}
+
+func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
+	newConns := make(map[string]context.Context)
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		//TODO: keep cookies for session management
+
+		srvAddr := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+		port := ":" + ParsePort(srvAddr.String())
+		//FIXME: This should be stored more gracefully
+		handler := NewHandler(port)
+		handler.HandleFn(r.URL.Path, hf)
+
+		// get id url param:
+		id := r.URL.Query().Get("fncmp_id")
+		if id == "" {
+			newId := uuid.NewString()
+			newConns[newId] = r.Context()
+			writer := Writer{ResponseWriter: w}
+			socketPath := r.URL.Path + "?fncmp_id=" + newId
+
+			script := js(handler.port, socketPath)
+			writer.Write([]byte("<script id='fncmp_script'>" + script + "</script>"))
+			h(&writer, r)
+			// writer.Write([]byte(`
+			// 	// <body style='margin:0'>
+			// 	// <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.1/flowbite.min.js"></script>
+			// 	// </body>
+			// `))
+
+			w.Write(writer.buf)
+		} else {
+			context, ok := newConns[id]
+			if !ok {
+				log.Println("error: no connection found")
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("error: no connection found"))
+				return
+			}
+			// delete(newConns, id)
+
+			newConnection, err := NewConn(w, r, handler.id, id)
+			if err != nil {
+				log.Println("error: failed to create new connection")
+				log.Println(err)
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("error: failed to create new connection"))
+				return
+			}
+			newConnection.HandlerID = handler.id
+			//TODO: write cookie
+
+			fn := hf(context)
+			fn.dispatch.Conn = newConnection
+			fn.dispatch.ConnID = id
+			fn.dispatch.HandlerID = handler.id
+			handler.out <- fn
+			handler.listen()
+			newConnection.listen()
+		}
+	}
+}
+
+func ParsePort(addr string) string {
+	port := strings.Split(addr, ":")
+	return port[len(port)-1]
+}
+
+const TestKey ContextKey = "test"
+
+func MiddleWareTest(next http.HandlerFunc) http.HandlerFunc {
+
+	// ctx := context.WithValue(context.Background(), TestKey, "test")
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
 		next(w, r)
 	}
 }

@@ -25,8 +25,10 @@ func NewFn(c Component) FnComponent {
 		Context:  context.Background(),
 		id:       id,
 		dispatch: newDispatch(id),
-	}.WithTag(Body).WithRender().InnerHTML()
-	c.Render(f.Context, f)
+	}.SwapTagInner("main")
+	if c != nil {
+		c.Render(f.Context, f)
+	}
 	return f
 }
 
@@ -40,20 +42,28 @@ func HandleLogin(ctx context.Context) FnComponent {
 	}
 	if !ok {
 		err := fmt.Errorf("error: expected user, got %T", event.Data)
-		return LoginForm(context.WithValue(ctx, ErrorKey, err))
+		return LoginPage(context.WithValue(ctx, ErrorKey, err))
 	}
+
+	testEvent, err := UnmarshalEventData[EventTarget](event)
+	if err != nil {
+		err := fmt.Errorf("error: expected touch event, got %T", event.Data)
+		return LoginPage(context.WithValue(ctx, ErrorKey, err))
+	}
+	fmt.Println(testEvent)
 
 	user, err := UnmarshalEventData[User](event)
 	if err != nil {
-		return LoginForm(context.WithValue(ctx, ErrorKey, err))
+		return LoginPage(context.WithValue(ctx, ErrorKey, err))
 	}
 
 	if user.Username != "Sean" || user.Password != "password" {
-		err = fmt.Errorf("error: invalid username or password")
-		return LoginForm(context.WithValue(ctx, ErrorKey, err))
+		err = fmt.Errorf("invalid username or password")
+		return NewFn(ErrorMessage(err)).SwapTargetInner("error_message")
+		// return LoginPage(context.WithValue(ctx, ErrorKey, err))
 	}
 
-	return Welcome(context.WithValue(ctx, UserKey, user)).WithTag(Body)
+	return Welcome(context.WithValue(ctx, UserKey, user))
 }
 
 func Welcome(ctx context.Context) FnComponent {
@@ -63,26 +73,55 @@ func Welcome(ctx context.Context) FnComponent {
 	`))
 }
 
-func LoginForm(ctx context.Context) FnComponent {
+func LoginPage(ctx context.Context) FnComponent {
 	err, ok := ctx.Value(ErrorKey).(error)
 	msg := ""
 	if ok {
 		msg = err.Error()
 	}
+	fmt.Println(msg)
 
-	return NewFn(HTML(`
-	<form method="POST">
-		<input type="text" name="username" placeholder="username">
-		<input type="password" name="password" placeholder="password">
-		<button type="submit">Login</button>
-		<div><p>`+msg+`</p></div>
-	</form>
-	`)).WithEvents(HandleLogin, OnSubmit)
+	input := HTML(`<input type="text" id="username" name="username" placeholder="Username">`)
+	// TODO: FnComponent render function needs to be taking account for event listeners and applying them appropriately
+	// inner FnComponent event listeners are not being applied
+	inputFn := NewFn(input).WithEvents(func(ctx context.Context) FnComponent {
+		return RedirectPage("/portfolio")
+	}, OnFocus)
+
+	return NewFn(Modal(inputFn))
 }
 
-func HandleMain(ctx context.Context) FnComponent {
+func HandleExperienceFn(ctx context.Context) FnComponent {
+	return NewFn(Experience())
+}
+func HandleMainFn(ctx context.Context) FnComponent {
+	return NewFn(HTML(""))
+}
 
-	return LoginForm(ctx)
+func HandleProjectsFn(ctx context.Context) FnComponent {
+	return NewFn(InfoCard())
+}
+
+type Contact struct {
+	Email   string `json:"email"`
+	Subject string `json:"subject"`
+	Message string `json:"message"`
+}
+
+func HandleContactFn(ctx context.Context) FnComponent {
+	form := NewFn(ContactForm()).WithEvents(func(ctx context.Context) FnComponent {
+		event := ctx.Value(EventKey).(EventListener)
+		info, err := UnmarshalEventData[Contact](event)
+		if err != nil {
+			return NewFn(nil).WithError(err)
+		}
+		fmt.Println(info)
+
+		return RedirectPage("/contact")
+	}, OnSubmit)
+
+	// TODO: Append form to a page component
+	return form
 }
 
 func HandleWelcome(ctx context.Context) FnComponent {
@@ -100,7 +139,7 @@ func HandleWelcome(ctx context.Context) FnComponent {
 }
 
 func (f FnComponent) Render(ctx context.Context, w io.Writer) error {
-	w.Write([]byte(fmt.Sprint("<div id='" + f.id + "'>")))
+	w.Write([]byte(fmt.Sprint("<div id='" + f.id + "' events=" + f.dispatch.FnRender.ListenerStrings() + ">")))
 	HTML(f.dispatch.FnRender.HTML).Render(ctx, w)
 	w.Write(f.dispatch.buf)
 	w.Write([]byte("</div>"))
@@ -130,9 +169,9 @@ func (f FnComponent) WithRender() FnComponent {
 	return f
 }
 
-func (f FnComponent) WithRedirect(action string) FnComponent {
+func (f FnComponent) WithRedirect(url string) FnComponent {
 	f.dispatch.Function = Redirect
-	f.dispatch.Action = action
+	f.dispatch.FnRedirect.URL = url
 	return f
 }
 
@@ -175,20 +214,100 @@ func (f FnComponent) WithTag(tag Tag) FnComponent {
 }
 
 func (f FnComponent) AppendHTML(html string) FnComponent {
-	f.dispatch.FnRender.HTML += html
+	c := HTML(html)
+	err := c.Render(f.Context, f)
+	if err != nil {
+		f.dispatch.FnError.Message = err.Error()
+	}
 	return f
 }
 
-func (f FnComponent) InnerHTML() FnComponent {
+func (f FnComponent) AppendTag(t Tag) FnComponent {
+	f.dispatch.Function = Render
+	f.dispatch.FnRender.Tag = t
+	f.dispatch.FnRender.Append = true
+	f.dispatch.FnRender.Prepend = false
+	f.dispatch.FnRender.Inner = false
 	f.dispatch.FnRender.Outer = false
-	f.dispatch.FnRender.Inner = true
 	return f
 }
 
-func (f FnComponent) OuterHTML() FnComponent {
+func (f FnComponent) PrependTag(t Tag) FnComponent {
+	f.dispatch.Function = Render
+	f.dispatch.FnRender.Tag = t
+	f.dispatch.FnRender.Append = false
+	f.dispatch.FnRender.Prepend = true
+	f.dispatch.FnRender.Inner = false
+	f.dispatch.FnRender.Outer = false
+	return f
+}
+
+func (f FnComponent) SwapTagOuter(t Tag) FnComponent {
+	f.dispatch.Function = Render
+	f.dispatch.FnRender.Tag = t
+	f.dispatch.FnRender.Append = false
+	f.dispatch.FnRender.Prepend = false
 	f.dispatch.FnRender.Inner = false
 	f.dispatch.FnRender.Outer = true
 	return f
+}
+
+func (f FnComponent) SwapTagInner(t Tag) FnComponent {
+	f.dispatch.Function = Render
+	f.dispatch.FnRender.Tag = t
+	f.dispatch.FnRender.Append = false
+	f.dispatch.FnRender.Prepend = false
+	f.dispatch.FnRender.Inner = true
+	f.dispatch.FnRender.Outer = false
+	return f
+}
+
+func (f FnComponent) AppendTarget(id string) FnComponent {
+	f.dispatch.Function = Render
+	f.dispatch.FnRender.Tag = ""
+	f.dispatch.FnRender.TargetID = id
+	f.dispatch.FnRender.Append = true
+	f.dispatch.FnRender.Prepend = false
+	f.dispatch.FnRender.Inner = false
+	f.dispatch.FnRender.Outer = false
+	return f
+}
+
+func (f FnComponent) PrependTarget(id string) FnComponent {
+	f.dispatch.Function = Render
+	f.dispatch.FnRender.Tag = ""
+	f.dispatch.FnRender.TargetID = id
+	f.dispatch.FnRender.Append = false
+	f.dispatch.FnRender.Prepend = true
+	f.dispatch.FnRender.Inner = false
+	f.dispatch.FnRender.Outer = false
+	return f
+}
+
+func (f FnComponent) SwapTargetOuter(id string) FnComponent {
+	f.dispatch.Function = Render
+	f.dispatch.FnRender.Tag = ""
+	f.dispatch.FnRender.TargetID = id
+	f.dispatch.FnRender.Append = false
+	f.dispatch.FnRender.Prepend = false
+	f.dispatch.FnRender.Inner = false
+	f.dispatch.FnRender.Outer = true
+	return f
+}
+
+func (f FnComponent) SwapTargetInner(id string) FnComponent {
+	f.dispatch.Function = Render
+	f.dispatch.FnRender.Tag = ""
+	f.dispatch.FnRender.TargetID = id
+	f.dispatch.FnRender.Append = false
+	f.dispatch.FnRender.Prepend = false
+	f.dispatch.FnRender.Inner = true
+	f.dispatch.FnRender.Outer = false
+	return f
+}
+
+func RedirectPage(url string) FnComponent {
+	return NewFn(nil).WithRedirect(url)
 }
 
 // HTML implements the Component interface

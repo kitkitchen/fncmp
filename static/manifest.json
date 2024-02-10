@@ -1,12 +1,12 @@
 {
     "short_name": "App",
     "name": "My App",
-    "favicon": "assets/img/icon.png",
+    "favicon": "/static/favicon.ico",
     "icons": [
       {
-        "src": "assets/img/icon.png",
+        "src": "/static/favicon.ico",
         "sizes": "48x48",
-        "type": "image/png"
+        "type": "image/ico"
       }
     ],
     "start_url": "index.html",
