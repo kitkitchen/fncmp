@@ -1,16 +1,126 @@
 <!DOCTYPE html>
-    <head>
-        <title>FnComponents Demo</title>
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <link rel="manifest" href="manifest.json" />
-        <script>
-            window.location.href = "/about"
-        </script>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-    </head>
+<html>
+
+<head>
+    <title>Framework demo</title>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="stylesheet" href="/assets/stylesheets/tailwind.min.css" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.1/flowbite.min.css" rel="stylesheet" />
+    <script>
+        const tester = (value) => {
+            alert(value);
+        }
+
+    </script>
+</head>
+
+<body class="bg-white">
+    <button data-drawer-target="default-sidebar" data-drawer-toggle="default-sidebar" aria-controls="default-sidebar"
+        type="button"
+        class="inline-flex items-center p-2 mt-2 ms-3 text-sm text-gray-500 rounded-lg sm:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600">
+        <span class="sr-only">Open sidebar</span>
+        <svg class="w-6 h-6" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20"
+            xmlns="http://www.w3.org/2000/svg">
+            <path clip-rule="evenodd" fill-rule="evenodd"
+                d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z">
+            </path>
+        </svg>
+    </button>
+    <aside id="default-sidebar"
+        class="fixed top-0 left-0 z-40 w-64 h-screen transition-transform -translate-x-full sm:translate-x-0"
+        aria-label="Sidebar">
+        <div class="h-full px-3 py-4 overflow-y-auto bg-white dark:bg-gray-900">
+            <ul class="space-y-2 font-medium">
+                <li>
+                    <a href="/" id="about-link"
+                        class="flex items-center p-2 text-green-700 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"><svg
+                            class="w-[24px] h-[24px] text-green-700 dark:text-white" aria-hidden="true"
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 6v13m0-13c-2.8-.8-4.7-1-8-1a1 1 0 0 0-1 1v11c0 .6.5 1 1 1 3.2 0 5 .2 8 1m0-13c2.8-.8 4.7-1 8-1 .6 0 1 .5 1 1v11c0 .6-.5 1-1 1-3.2 0-5 .2-8 1">
+                            </path>
+                        </svg><span class="ms-3">About</span></a>
+                </li>
+                <li>
+                    <a href="/projects" id="projects-link"
+                        class="flex items-center p-2 text-green-700 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"><svg
+                            class="w-[24px] h-[24px] text-green-700 dark:text-white" aria-hidden="true"
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 3v4c0 .6-.4 1-1 1H5m5 4-2 2 2 2m4-4 2 2-2 2m5-12v16c0 .6-.4 1-1 1H6a1 1 0 0 1-1-1V8c0-.4.1-.6.3-.8l4-4 .6-.2H18c.6 0 1 .4 1 1Z">
+                            </path>
+                        </svg><span class="ms-3">Projects</span></a>
+                </li>
+                <li>
+                    <a href="/experience" id="experience-link"
+                        class="flex items-center p-2 text-green-700 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"><svg
+                            class="w-[24px] h-[24px] text-green-700 dark:text-white" aria-hidden="true"
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 7H5a2 2 0 0 0-2 2v4m5-6h8M8 7V5c0-1.1.9-2 2-2h4a2 2 0 0 1 2 2v2m0 0h3a2 2 0 0 1 2 2v4m0 0v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6m18 0s-4 2-9 2-9-2-9-2m9-2h0">
+                            </path>
+                        </svg><span class="ms-3">Experience</span></a>
+                </li>
+                <li>
+                    <a href="/contact" id="contact-link"
+                        class="flex items-center p-2 text-green-700 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"><svg
+                            class="w-[24px] h-[24px] text-green dark:text-white" aria-hidden="true"
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M7 6H5m2 3H5m2 3H5m2 3H5m2 3H5m11-1a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2M7 3h11c.6 0 1 .4 1 1v16c0 .6-.4 1-1 1H7a1 1 0 0 1-1-1V4c0-.6.4-1 1-1Zm8 7a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z">
+                            </path>
+                        </svg><span class="ms-3">Contact</span></a>
+                </li>
+            </ul>
+        </div>
+    </aside>
+    <main class="px-4 sm:ml-64 h-auto pt-20 pb-20 overflow-y-auto"></main>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.1/flowbite.min.js" defer></script>
+    <script src="/assets/index.js"></script>
+    <script>
+        console.log(window.location.pathname)
+        let element
+        switch (window.location.pathname) {
+            case '/':
+                element = document.getElementById('about-link')
+                break;
+            case '/projects':
+                element = document.getElementById('projects-link')
+                break;
+            case '/experience':
+                element = document.getElementById('experience-link')
+                break;
+            case '/contact':
+                element = document.getElementById('contact-link')
+                break;
+        }
+        element.classList.add('bg-gray-100')
+        element.classList.add('pointer-events-none')
+        element.classList.add('cursor-not-allowed')
+    </script>
+</body>
+
+<footer class="z-50 absolute bottom-0 left-0 z-20 w-full p-6 pt-4 bg-white border-t border-gray-200 shadow flex flex-col md:flex-row items-center md:items-center md:justify-between dark:bg-gray-800 dark:border-gray-600">
+    <span class="text-sm text-gray-500 sm:text-center dark:text-gray-400">© 2024 <a href="https://seanburman.com/" class="hover:text-green-900">Sean Burman</a>. All Rights Reserved.
+    </span>
+    <ul class="flex flex-wrap items-center text-sm font-medium dark:text-gray-400 sm:mt-0">
+        <li>
+            <a href="/" class="text-gray-500 hover:text-green-900 me-4 md:me-6 ">About</a>
+        </li>
+        <li>
+            <a href="#" class="text-gray-500 hover:text-green-900 me-4 md:me-6 ">Licensing</a>
+        </li>
+        <li>
+            <a href="/contact" class="text-gray-500 hover:text-green-900">Contact</a>
+        </li>
+    </ul>
+</footer>
+
 </html>
-    <!-- TODO: include ability to run wasm -->
-    <!-- <script>
+<!-- TODO: include ability to run wasm -->
+<!-- <script>
     // Polyfill
     if (!WebAssembly.instantiateStreaming) {
         WebAssembly.instantiateStreaming = async (resp, importObject) => {
@@ -24,5 +134,3 @@
         go.run(result.instance);
     });
     </script> -->
-    <!-- TODO: create different default layouts for user to select from in options on connect -->
-    <!-- can include grid layouts, flex etc, ADD TO GO COMPONENTS FILES -->

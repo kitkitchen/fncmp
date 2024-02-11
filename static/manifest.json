@@ -1,12 +1,12 @@
 {
-    "short_name": "App",
-    "name": "My App",
-    "favicon": "/static/favicon.ico",
+    "short_name": "Burman",
+    "name": "Sean Burman",
+    "favicon": "/favicon.ico",
     "icons": [
       {
-        "src": "/static/favicon.ico",
-        "sizes": "48x48",
-        "type": "image/ico"
+        "src": "icon.png",
+        "sizes": "178x180",
+        "type": "image/png"
       }
     ],
     "start_url": "index.html",

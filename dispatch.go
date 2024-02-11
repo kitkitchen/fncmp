@@ -5,11 +5,12 @@ import "encoding/json"
 type FunctionName string
 
 const (
-	Render   FunctionName = "render"
-	Redirect FunctionName = "redirect"
-	Event    FunctionName = "event"
-	Custom   FunctionName = "custom"
-	Error    FunctionName = "error"
+	initialize FunctionName = "initialize"
+	Render     FunctionName = "render"
+	Redirect   FunctionName = "redirect"
+	Event      FunctionName = "event"
+	Custom     FunctionName = "custom"
+	Error      FunctionName = "error"
 )
 
 type Tag string

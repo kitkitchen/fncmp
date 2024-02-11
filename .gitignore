@@ -2,3 +2,4 @@ es-build
 main.go
 .vscode
 tailwindcss
+.DS_Store

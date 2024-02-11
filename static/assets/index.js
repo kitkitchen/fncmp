@@ -3,23 +3,50 @@ let conn_id = undefined;
 let base_url = undefined;
 let verbose = false;
 class Socket {
-    constructor(addr) {
+    constructor() {
         this.ws = null;
         this.addr = undefined;
         this.key = undefined;
         if (this.addr) {
             throw new Error("ws: already connected to server...");
         }
-        if (!addr) {
-            throw new Error("ws: no address provided...");
+        // check local storage for key
+        // if key exists, use it
+        // if key does not exist, generate a new key and store in local storage
+        let key = localStorage.getItem("fncmp_key");
+        if (!key) {
+            // generate uuid
+            key = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+                var r = (Math.random() * 16) | 0, v = c == "x" ? r : (r & 0x3) | 0x8;
+                return v.toString(16);
+            });
+            localStorage.setItem("fncmp_key", key);
         }
-        this.addr = addr;
-        this.connect(addr);
+        this.key = key;
+        // strip "/"" from end of window.location.pathname if it exists:
+        let path = window.location.pathname.split("");
+        console.log(path);
+        let path_parsed = "";
+        if (path[-1] == "/") {
+            path.pop();
+            path_parsed = path.join("");
+        }
+        else {
+            path_parsed = path.join("");
+        }
+        if (path_parsed == "") {
+            path_parsed = "/main";
+        }
+        console.log(path_parsed);
+        //TODO: get this from local storage or generate a new id and store in local storage
+        this.addr = "ws://" + window.location.host + path_parsed + "?fncmp_id=" + this.key;
+        console.log(this.addr);
+        this.connect();
     }
-    connect(addr) {
+    connect() {
         // let key = "";
         try {
-            this.ws = new WebSocket(addr);
+            this.ws = new WebSocket(this.addr);
         }
         catch (_a) {
             throw new Error("ws: failed to connect to server...");
@@ -50,6 +77,10 @@ class API {
             this.ws.send(JSON.stringify(data));
         };
         this.funs = {
+            initialize: (d) => {
+                d = this.utils.parseEventListeners(document.body, d);
+                this.Dispatch(this.utils.addEventListeners(d));
+            },
             render: (d) => {
                 console.log("RENDER:");
                 console.log(d);
@@ -86,7 +117,14 @@ class API {
                 if (d.render.prepend) {
                     elem.innerHTML = html + elem.innerHTML;
                 }
-                const events = this.utils.getAttributes(elem, "events");
+                d = this.utils.parseEventListeners(elem, d);
+                this.Dispatch(this.utils.addEventListeners(d));
+                return;
+            },
+        };
+        this.utils = {
+            parseEventListeners: (element, d) => {
+                const events = this.utils.getAttributes(element, "events");
                 const listeners = events.map((e) => {
                     console.log(e);
                     const event = JSON.parse(e);
@@ -99,11 +137,8 @@ class API {
                 console.log("LISTENERS:");
                 console.log(listeners_filtered);
                 d.render.event_listeners = listeners_filtered;
-                this.Dispatch(this.utils.addEventListeners(d));
-                return;
+                return d;
             },
-        };
-        this.utils = {
             // Element selectors
             parseFormData: (ev, d) => {
                 const form = ev.target;
@@ -202,6 +237,9 @@ class API {
             this.ws = ws;
         }
         switch (d.function) {
+            case "initialize":
+                this.Dispatch(this.funs.initialize(d));
+                return;
             case "redirect":
                 window.location.href = d.redirect.url;
                 return;
@@ -366,5 +404,5 @@ function ParseFormData(ev) {
     console.log(data);
     return data;
 }
-new Socket("ws://192.168.1.154%s%s");
+new Socket();
 const api = new API();

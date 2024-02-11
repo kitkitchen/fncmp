@@ -95,7 +95,7 @@ func HandleExperienceFn(ctx context.Context) FnComponent {
 	return NewFn(Experience())
 }
 func HandleMainFn(ctx context.Context) FnComponent {
-	return NewFn(HTML(""))
+	return NewFn(InfoCard())
 }
 
 func HandleProjectsFn(ctx context.Context) FnComponent {
@@ -149,6 +149,17 @@ func (f FnComponent) Render(ctx context.Context, w io.Writer) error {
 func (f FnComponent) Write(p []byte) (n int, err error) {
 	f.dispatch.buf = append(f.dispatch.buf, p...)
 	return len(p), nil
+}
+
+// Initialize is a function that is called when a component is first created and added to the DOM
+// and instructs the API to only process event listeners.
+//
+// It does not render the component which is assumed to have already been rendered on page load.
+func (f FnComponent) initialize() FnComponent {
+	if f.dispatch.Function == Render {
+		f.dispatch.Function = initialize
+	}
+	return f
 }
 
 func (f FnComponent) WithContext(ctx context.Context) FnComponent {

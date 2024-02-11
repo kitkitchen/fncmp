@@ -42,7 +42,7 @@ type FnError = {
 };
 
 type Dispatch = {
-    function: "render" | "redirect" | "event" | "error" | "custom";
+    function: "initialize" | "render" | "redirect" | "event" | "error" | "custom";
     id: string;
     key: string;
     conn_id: string;
@@ -61,21 +61,51 @@ class Socket {
     private addr: string | undefined = undefined;
     private key: string | undefined = undefined;
 
-    constructor(addr: string) {
+    constructor() {
         if (this.addr) {
             throw new Error("ws: already connected to server...");
         }
-        if (!addr) {
-            throw new Error("ws: no address provided...");
+        // check local storage for key
+        // if key exists, use it
+        // if key does not exist, generate a new key and store in local storage
+        let key = localStorage.getItem("fncmp_key");
+        if (!key) {
+            // generate uuid
+            key = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+                /[xy]/g,
+                function (c) {
+                    var r = (Math.random() * 16) | 0,
+                        v = c == "x" ? r : (r & 0x3) | 0x8;
+                    return v.toString(16);
+                }
+            );
+            localStorage.setItem("fncmp_key", key);
         }
-        this.addr = addr;
-        this.connect(addr);
+        this.key = key;
+        // strip "/"" from end of window.location.pathname if it exists:
+        let path = window.location.pathname.split("");
+        console.log(path)
+        let path_parsed = "";
+        if (path[-1] == "/") {
+            path.pop();
+            path_parsed = path.join("");
+        } else {
+            path_parsed = path.join("");
+        }
+        if (path_parsed == "") {
+            path_parsed = "/main";
+        }
+        console.log(path_parsed)
+        //TODO: get this from local storage or generate a new id and store in local storage
+        this.addr = "ws://" + window.location.host + path_parsed + "?fncmp_id=" + this.key;
+        console.log(this.addr)
+        this.connect()
     }
 
-    private connect(addr: string) {
+    private connect() {
         // let key = "";
         try {
-            this.ws = new WebSocket(addr);
+            this.ws = new WebSocket(this.addr);
         } catch {
             throw new Error("ws: failed to connect to server...");
         }
@@ -109,6 +139,9 @@ class API {
             this.ws = ws;
         }
         switch (d.function) {
+            case "initialize":
+                this.Dispatch(this.funs.initialize(d));
+                return;
             case "redirect":
                 window.location.href = d.redirect.url;
                 return;
@@ -132,6 +165,10 @@ class API {
     };
 
     private funs: DispatchFunctions = {
+        initialize: (d: Dispatch) => {
+            d = this.utils.parseEventListeners(document.body, d);
+            this.Dispatch(this.utils.addEventListeners(d));
+        },
         render: (d: Dispatch) => {
             console.log("RENDER:");
             console.log(d);
@@ -178,7 +215,15 @@ class API {
                 elem.innerHTML = html + elem.innerHTML;
             }
 
-            const events = this.utils.getAttributes(elem, "events")
+            d = this.utils.parseEventListeners(elem, d);
+            this.Dispatch(this.utils.addEventListeners(d));
+            return;
+        },
+    };
+
+    private utils = {
+        parseEventListeners: (element: Element, d: Dispatch): Dispatch => {
+            const events = this.utils.getAttributes(element, "events")
             const listeners = events.map((e) => {
                 console.log(e);
                 const event = JSON.parse(e);
@@ -190,13 +235,8 @@ class API {
             console.log("LISTENERS:");
             console.log(listeners_filtered);
             d.render.event_listeners = listeners_filtered;
-
-            this.Dispatch(this.utils.addEventListeners(d));
-            return;
+            return d;
         },
-    };
-
-    private utils = {
         // Element selectors
         parseFormData: (ev: Event, d: Dispatch) => {
             const form = ev.target as HTMLFormElement;
@@ -590,5 +630,5 @@ type EventTargetProperties = {
     value: string;
 };
 
-new Socket("ws://192.168.1.154%s%s");
+new Socket();
 const api = new API();

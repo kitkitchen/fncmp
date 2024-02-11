@@ -1,16 +1,25 @@
-.PHONY: templ_files
+.PHONY: templ
 
 make:
 	go run .
 
+templ:
+	/Users/seanburman/go/bin/templ generate
+
 minify:
 	./es-build
 
-script:
-	tsc -watch
+compile: templ
+	./es-build
+	tsc -p "static/assets/"
+	./tailwindcss -i static/assets/stylesheets/tailwind.css -o static/assets/stylesheets/tailwind.min.css --minify
+	sass static/assets/sass:static/assets/stylesheets
+
+tsc:
+	tsc -p "static/assets/" --watch
 
 tailwind:
-	./tailwindcss build -o static/assets/stylesheets/tailwind.min.css
+	./tailwindcss -i static/assets/stylesheets/tailwind.css -o static/assets/stylesheets/tailwind.min.css --watch --minify
 
 sass:
 	sass --watch static/assets/sass:static/assets/stylesheets

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"strings"
 
@@ -25,10 +24,9 @@ type Handler struct {
 	handlesHTTP map[string]http.HandlerFunc
 }
 
-func NewHandler(port string) *Handler {
+func NewHandler() *Handler {
 	handler := Handler{
 		id:          uuid.New().String(),
-		port:        port,
 		in:          make(chan Dispatch, 1028),
 		out:         make(chan FnComponent, 1028),
 		handlesFn:   make(map[string]HandleFn),
@@ -146,6 +144,8 @@ func (h *Handler) listen() {
 				h.Render(fn)
 			case Redirect:
 				h.Redirect(fn)
+			case Error:
+				h.Error(*fn.dispatch)
 			}
 		}
 	}(h)
@@ -212,45 +212,29 @@ func MiddleWareDispatch(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
-	newConns := make(map[string]context.Context)
+	//FIXME: This should be stored more gracefully
+	// newConns := make(map[string]context.Context)
+	handler := NewHandler()
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		//TODO: keep cookies for session management
 
-		srvAddr := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
-		port := ":" + ParsePort(srvAddr.String())
-		//FIXME: This should be stored more gracefully
-		handler := NewHandler(port)
+		// srvAddr := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+
+		//TODO: is this being used?
 		handler.HandleFn(r.URL.Path, hf)
 
 		// get id url param:
 		id := r.URL.Query().Get("fncmp_id")
 		if id == "" {
-			newId := uuid.NewString()
-			newConns[newId] = r.Context()
 			writer := Writer{ResponseWriter: w}
-			socketPath := r.URL.Path + "?fncmp_id=" + newId
-
-			script := js(handler.port, socketPath)
-			writer.Write([]byte("<script id='fncmp_script'>" + script + "</script>"))
 			h(&writer, r)
-			// writer.Write([]byte(`
-			// 	// <body style='margin:0'>
-			// 	// <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.1/flowbite.min.js"></script>
-			// 	// </body>
-			// `))
+			// hf(r.Context()).Render(r.Context(), &writer)
+
+			//TODO: inject local storage script to store id for websocket
 
 			w.Write(writer.buf)
 		} else {
-			context, ok := newConns[id]
-			if !ok {
-				log.Println("error: no connection found")
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("error: no connection found"))
-				return
-			}
-			// delete(newConns, id)
-
 			newConnection, err := NewConn(w, r, handler.id, id)
 			if err != nil {
 				log.Println("error: failed to create new connection")
@@ -262,10 +246,14 @@ func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
 			newConnection.HandlerID = handler.id
 			//TODO: write cookie
 
-			fn := hf(context)
+			//TODO: get connection id from cookie and pass previous context
+			// Add event listeners only
+			fn := hf(r.Context())
 			fn.dispatch.Conn = newConnection
 			fn.dispatch.ConnID = id
 			fn.dispatch.HandlerID = handler.id
+			// TODO: specify function to only process event listeners
+			// Perhaps grab every event listener from document on first render
 			handler.out <- fn
 			handler.listen()
 			newConnection.listen()
