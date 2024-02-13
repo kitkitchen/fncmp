@@ -25,8 +25,8 @@ sass:
 	sass --watch static/assets/sass:static/assets/stylesheets
 
 publish:
-	git tag -s v0.0.22 -m "fncmp v0.0.22" && \
-	GOPROXY=proxy.golang.org go list -m github.com/kitkitchen/fncmp@v0.0.22
+	git tag -s v0.1.0 -m "fncmp v0.1.0" && \
+	GOPROXY=proxy.golang.org go list -m github.com/kitkitchen/fncmp@v0.1.0
 
 lookup:
-	curl https://sum.golang.org/lookup/github.com/kitkitchen/fncmp@v0.0.22
+	curl https://sum.golang.org/lookup/github.com/kitkitchen/fncmp@v0.1.0

@@ -1,4 +1,4 @@
-package main
+package fncmp
 
 // Sanitize html
 import (

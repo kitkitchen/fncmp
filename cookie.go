@@ -1,4 +1,4 @@
-package main
+package fncmp
 
 import "net/http"
 

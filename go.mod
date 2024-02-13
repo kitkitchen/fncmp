@@ -12,7 +12,6 @@ require (
 	github.com/charmbracelet/lipgloss v0.9.1 // indirect
 	github.com/charmbracelet/log v0.3.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
-	github.com/jordan-wright/email v4.0.1-0.20210109023952-943e75fe5223+incompatible // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
