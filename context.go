@@ -1,6 +1,9 @@
 package main
 
-import "context"
+import (
+	"context"
+	"net/http"
+)
 
 type ContextKey string
 
@@ -10,7 +13,14 @@ const (
 	ErrorKey ContextKey = "error"
 )
 
-type ContextWithDispatch struct {
+type ContextWithRequest struct {
 	context.Context
-	Dispatch
+	*http.Request
+	dispatchDetails
+}
+
+type dispatchDetails struct {
+	ConnID    string
+	Conn      *Conn
+	HandlerID string
 }

@@ -21,8 +21,19 @@ func (c *conns) Get(id string) (*Conn, bool) {
 	return conn, ok
 }
 
+func (c *conns) Set(id string, conn *Conn) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.pool[id] = conn
+}
+
+func (c *conns) Delete(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.pool, id)
+}
+
 type (
-	// Conn is a websocket connection with a unique key, a pointer to a pool, and a channel for messages.
 	conns struct {
 		mu   sync.Mutex
 		pool map[string]*Conn
@@ -33,23 +44,15 @@ type (
 		HandlerID string
 		Messages  chan []byte
 	}
-	ConnectionInfo struct {
-		ConnID string `json:"conn_id"`
-		Config struct {
-			BaseUrl   string `json:"base_url"`
-			MainRoute string `json:"main_route"`
-		}
-	}
 )
 
 // NewConn upgrades an http connection to a websocket connection and returns a Conn
 // or an error if the upgrade fails.
 func NewConn(w http.ResponseWriter, r *http.Request, handlerID string, ID string) (*Conn, error) {
-	connPool.mu.Lock()
-	defer connPool.mu.Unlock()
-
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
+			// TODO: check cookie for session id
+			// Set as conn id
 			return true
 			// host := strings.Split(r.Host, ":")[0]
 			// return host == "localhost"
@@ -66,7 +69,7 @@ func NewConn(w http.ResponseWriter, r *http.Request, handlerID string, ID string
 		HandlerID: handlerID,
 		Messages:  make(chan []byte, 16),
 	}
-	connPool.pool[c.ID] = c
+	connPool.Set(c.ID, c)
 	return c, nil
 }
 
@@ -76,9 +79,7 @@ func (c *Conn) close() error {
 	if c == nil {
 		return errors.New("cannot close nil connection")
 	}
-	connPool.mu.Lock()
-	defer connPool.mu.Unlock()
-	delete(connPool.pool, c.ID)
+	connPool.Delete(c.ID)
 	c.websocket.Close()
 	return nil
 }
@@ -109,7 +110,7 @@ func (c *Conn) listen() {
 				continue
 			}
 			// Get handler from handler pool
-			handler, ok := handlers[dispatch.HandlerID]
+			handler, ok := handlers.Get(dispatch.HandlerID)
 			if !ok {
 				log.Printf("error: handler '%s' not found", dispatch.HandlerID)
 				continue
@@ -135,7 +136,6 @@ func (c *Conn) listen() {
 	}
 }
 
-// Publish publishes a message to the Conn's Messages channel.
 func (c *Conn) Publish(msg []byte) {
 	// if msg is not json encodable, return
 	_, err := json.Marshal(msg)

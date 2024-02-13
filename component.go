@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 
 	"github.com/google/uuid"
 )
@@ -108,6 +109,11 @@ type Contact struct {
 	Message string `json:"message"`
 }
 
+type Args struct {
+	Name    string `json:"name"`
+	Message string `json:"message"`
+}
+
 func HandleContactFn(ctx context.Context) FnComponent {
 	form := NewFn(ContactForm()).WithEvents(func(ctx context.Context) FnComponent {
 		event := ctx.Value(EventKey).(EventListener)
@@ -120,22 +126,11 @@ func HandleContactFn(ctx context.Context) FnComponent {
 		return RedirectPage("/contact")
 	}, OnSubmit)
 
-	// TODO: Append form to a page component
-	return form
-}
+	JS(ctx, "Testing", Args{Name: "Sean", Message: "Hello"})
 
-func HandleWelcome(ctx context.Context) FnComponent {
+	NewFn(HTML("<p class='mb-100'>hello</p>")).PrependTag("main").Now(ctx)
 
-	user, ok := ctx.Value(UserKey).(User)
-	if !ok {
-		return NewFn(HTML(`
-		<div><p>User not found</p></div>
-		`))
-	}
-
-	return NewFn(HTML(fmt.Sprintf(`
-	<div>Hello %s</div>
-	`, user.Username)))
+	return NewFn(ContactPage(form)).AppendTag("main")
 }
 
 func (f FnComponent) Render(ctx context.Context, w io.Writer) error {
@@ -151,17 +146,6 @@ func (f FnComponent) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-// Initialize is a function that is called when a component is first created and added to the DOM
-// and instructs the API to only process event listeners.
-//
-// It does not render the component which is assumed to have already been rendered on page load.
-func (f FnComponent) initialize() FnComponent {
-	if f.dispatch.Function == Render {
-		f.dispatch.Function = initialize
-	}
-	return f
-}
-
 func (f FnComponent) WithContext(ctx context.Context) FnComponent {
 	f.Context = ctx
 	return f
@@ -172,11 +156,6 @@ func (f FnComponent) WithEvents(h HandleFn, e ...OnEvent) FnComponent {
 		el := NewEventListener(v, f, h)
 		f.dispatch.FnRender.EventListeners = append(f.dispatch.FnRender.EventListeners, el)
 	}
-	return f
-}
-
-func (f FnComponent) WithRender() FnComponent {
-	f.dispatch.Function = Render
 	return f
 }
 
@@ -192,7 +171,7 @@ func (f FnComponent) WithError(err error) FnComponent {
 	return f
 }
 
-func (f FnComponent) WithCustom(fn string, arg any) FnComponent {
+func (f FnComponent) JS(fn string, arg any) FnComponent {
 	f.dispatch.Function = Custom
 	f.dispatch.FnCustom.Function = fn
 	f.dispatch.FnCustom.Data = arg
@@ -221,15 +200,6 @@ func (f FnComponent) WithTargetID(id string) FnComponent {
 
 func (f FnComponent) WithTag(tag Tag) FnComponent {
 	f.dispatch.FnRender.Tag = tag
-	return f
-}
-
-func (f FnComponent) AppendHTML(html string) FnComponent {
-	c := HTML(html)
-	err := c.Render(f.Context, f)
-	if err != nil {
-		f.dispatch.FnError.Message = err.Error()
-	}
 	return f
 }
 
@@ -319,6 +289,27 @@ func (f FnComponent) SwapTargetInner(id string) FnComponent {
 
 func RedirectPage(url string) FnComponent {
 	return NewFn(nil).WithRedirect(url)
+}
+
+func JS(ctx context.Context, fn string, arg any) {
+	NewFn(nil).JS(fn, arg).Now(ctx)
+}
+
+func (f FnComponent) Now(ctx context.Context) {
+	ctxWr, ok := ctx.(*ContextWithRequest)
+	if !ok {
+		log.Println("error: context not of type *ContextWithRequest")
+		return
+	}
+	details := ctxWr.dispatchDetails
+	f.dispatch.ConnID = details.ConnID
+	f.dispatch.HandlerID = details.HandlerID
+	f.dispatch.Conn = details.Conn
+	h, ok := handlers.Get(f.dispatch.HandlerID)
+	if !ok {
+		log.Printf("error: handler '%s' not found", f.dispatch.HandlerID)
+	}
+	h.out <- f
 }
 
 // HTML implements the Component interface

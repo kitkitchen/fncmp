@@ -3,3 +3,6 @@ main.go
 .vscode
 tailwindcss
 .DS_Store
+*chat
+*templ
+*.templ*

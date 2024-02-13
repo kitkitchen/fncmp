@@ -146,6 +146,8 @@ class API {
                 window.location.href = d.redirect.url;
                 return;
             case "custom":
+                console.log("CUSTOM:")
+                console.log(d)
                 this.Dispatch(window[d.custom.function](d.custom.data));
                 return;
             case "render":

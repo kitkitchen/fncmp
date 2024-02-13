@@ -6,17 +6,42 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 )
 
 // TODO: use mutex to lock handlers map
-var handlers = make(map[string]Handler)
+var handlers = handlerPool{
+	pool: make(map[string]Handler),
+}
+
+type handlerPool struct {
+	mu   sync.Mutex
+	pool map[string]Handler
+}
+
+func (h *handlerPool) Get(id string) (Handler, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	handler, ok := h.pool[id]
+	return handler, ok
+}
+
+func (h *handlerPool) Set(id string, handler Handler) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.pool[id] = handler
+}
+
+func (h *handlerPool) Delete(id string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.pool, id)
+}
 
 type Handler struct {
 	http.Handler
-	port        string
 	id          string
 	in          chan Dispatch
 	out         chan FnComponent
@@ -32,91 +57,12 @@ func NewHandler() *Handler {
 		handlesFn:   make(map[string]HandleFn),
 		handlesHTTP: make(map[string]http.HandlerFunc),
 	}
-	handlers[handler.id] = handler
+	handlers.Set(handler.id, handler)
 	return &handler
 }
 
 func (h Handler) ID() string {
 	return h.id
-}
-
-func (h *Handler) HandleFn(path string, handler HandleFn) {
-	h.handlesFn[path] = handler
-}
-
-func (h *Handler) HandleFunc(path string, handler func(w http.ResponseWriter, r *http.Request)) {
-	h.handlesHTTP[path] = handler
-}
-
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// get cookie and check if it exists
-	cookie, err := r.Cookie(h.id)
-	if err != nil {
-		log.Println(err)
-		// Set cookie
-		cookie = NewCookie(h.id, uuid.NewString(), r.URL.Path)
-		http.SetCookie(w, cookie)
-		r.AddCookie(cookie)
-	}
-
-	// split path
-	path := strings.Split(r.URL.Path, "/")
-
-	if path[len(path)-1] == h.id {
-		var p string
-		if cookie.Path == "" {
-			p = "/"
-		} else {
-			p = cookie.Path
-		}
-		h.HandleWS(w, r, cookie.Value, p)
-		return
-	} else {
-		fmt.Println(path[len(path)-1])
-	}
-
-	writer := Writer{ResponseWriter: w}
-	var socketPath string
-	if r.URL.Path == "/" {
-		socketPath = r.URL.Path + h.id
-	} else {
-		socketPath = r.URL.Path + "/" + h.id
-	}
-	script := js(h.port, socketPath)
-	writer.Write([]byte("<script>" + script + "</script>"))
-	// writer.Write([]byte("<body></body>"))
-	if h.handlesHTTP[r.URL.Path] != nil {
-		// FIXME: This is probably where bad url paths are getting stuck
-		MiddleWareDispatch(h.handlesHTTP[r.URL.Path]).ServeHTTP(&writer, r)
-	} else {
-		h.Handler.ServeHTTP(w, r)
-	}
-
-	w.Write(writer.buf)
-}
-
-func (h *Handler) HandleWS(w http.ResponseWriter, r *http.Request, id string, path string) {
-	// Upgrade connection to websocket
-	conn, err := NewConn(w, r, h.id, id)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	conn.HandlerID = h.id
-
-	go conn.listen()
-	handler, ok := h.handlesFn[path]
-	if !ok {
-		log.Printf("error: no handler found for path '%s'", path)
-		return
-	}
-
-	fn := handler(r.Context()).WithConnID(conn.ID).
-		WithRender().SwapTagInner(Body)
-	fn.dispatch.Conn = conn
-	fn.dispatch.HandlerID = h.id
-	h.out <- fn
-	fmt.Println(fn)
 }
 
 // Dispatch handles the routing of a Dispatch to the appropriate function.
@@ -144,6 +90,8 @@ func (h *Handler) listen() {
 				h.Render(fn)
 			case Redirect:
 				h.Redirect(fn)
+			case Custom:
+				h.Custom(fn)
 			case Error:
 				h.Error(*fn.dispatch)
 			}
@@ -161,6 +109,10 @@ func (h Handler) Render(fn FnComponent) {
 
 func (h Handler) Redirect(fn FnComponent) {
 	fmt.Println(fn)
+	h.MarshalAndPublish(*fn.dispatch)
+}
+
+func (h Handler) Custom(fn FnComponent) {
 	h.MarshalAndPublish(*fn.dispatch)
 }
 
@@ -183,7 +135,16 @@ func (h Handler) Event(d Dispatch) {
 		return
 	}
 	listener.Data = d.FnEvent.Data
-	response := listener.Handler(context.WithValue(context.Background(), EventKey, listener))
+	ctx := ContextWithRequest{
+		Context: context.WithValue(context.Background(), EventKey, listener),
+		Request: nil,
+		dispatchDetails: dispatchDetails{
+			ConnID:    d.ConnID,
+			Conn:      d.Conn,
+			HandlerID: h.id,
+		},
+	}
+	response := listener.Handler(ctx)
 	response.dispatch.Conn = d.Conn
 	response.dispatch.HandlerID = d.HandlerID
 	h.out <- response
@@ -221,9 +182,6 @@ func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
 
 		// srvAddr := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
 
-		//TODO: is this being used?
-		handler.HandleFn(r.URL.Path, hf)
-
 		// get id url param:
 		id := r.URL.Query().Get("fncmp_id")
 		if id == "" {
@@ -247,33 +205,23 @@ func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
 			//TODO: write cookie
 
 			//TODO: get connection id from cookie and pass previous context
-			// Add event listeners only
-			fn := hf(r.Context())
+			ctxWithRequest := &ContextWithRequest{
+				Context: r.Context(),
+				Request: r,
+				dispatchDetails: dispatchDetails{
+					ConnID:    id,
+					Conn:      newConnection,
+					HandlerID: handler.id,
+				},
+			}
+
+			fn := hf(ctxWithRequest)
 			fn.dispatch.Conn = newConnection
 			fn.dispatch.ConnID = id
 			fn.dispatch.HandlerID = handler.id
-			// TODO: specify function to only process event listeners
-			// Perhaps grab every event listener from document on first render
 			handler.out <- fn
 			handler.listen()
 			newConnection.listen()
 		}
-	}
-}
-
-func ParsePort(addr string) string {
-	port := strings.Split(addr, ":")
-	return port[len(port)-1]
-}
-
-const TestKey ContextKey = "test"
-
-func MiddleWareTest(next http.HandlerFunc) http.HandlerFunc {
-
-	// ctx := context.WithValue(context.Background(), TestKey, "test")
-
-	return func(w http.ResponseWriter, r *http.Request) {
-
-		next(w, r)
 	}
 }
