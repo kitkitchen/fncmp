@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"context"
@@ -128,7 +128,7 @@ func (h Handler) MarshalAndPublish(d Dispatch) {
 }
 
 func (h Handler) Event(d Dispatch) {
-	listener, ok := evtListeners.Get(d.FnEvent.ID)
+	listener, ok := evtListeners.Get(d.FnEvent.ID, d.Conn)
 	if !ok {
 		d.FnError.Message = fmt.Sprintf("error: event listener with id '%s' not found", d.FnEvent.ID)
 		h.Error(d)

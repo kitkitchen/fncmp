@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"context"
@@ -96,14 +96,14 @@ const (
 )
 
 type EventListener struct {
-	context.Context
-	ID       string   `json:"id"`
-	TargetID string   `json:"target_id"`
-	Handler  HandleFn `json:"-"`
-	On       OnEvent  `json:"on"`
-	Action   string   `json:"action"`
-	Method   string   `json:"method"`
-	Data     any      `json:"data"`
+	context.Context `json:"-"`
+	ID              string   `json:"id"`
+	TargetID        string   `json:"target_id"`
+	Handler         HandleFn `json:"-"`
+	On              OnEvent  `json:"on"`
+	Action          string   `json:"action"`
+	Method          string   `json:"method"`
+	Data            any      `json:"data"`
 }
 
 // TODO update this to regular dispatch func
@@ -112,13 +112,12 @@ func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
 	id := uuid.New().String()
 	el := EventListener{
 		Context:  f.Context,
+		ID:       id,
 		TargetID: f.id,
 		Handler:  h,
-		ID:       id,
 		On:       on,
 	}
-
-	evtListeners.Add(id, el)
+	evtListeners.Add(f.dispatch.Conn, el)
 	return el
 }
 
@@ -126,29 +125,32 @@ func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
 
 type eventListeners struct {
 	mu sync.Mutex
-	eh map[string]EventListener
+	el map[string]map[string]EventListener
 }
 
 var evtListeners = eventListeners{
-	eh: make(map[string]EventListener),
+	el: make(map[string]map[string]EventListener),
 }
 
-func (e *eventListeners) Add(id string, el EventListener) {
+func (e *eventListeners) Add(conn *Conn, el EventListener) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.eh[id] = el
+	if _, ok := e.el[conn.ID]; !ok {
+		e.el[conn.ID] = make(map[string]EventListener)
+	}
+	e.el[conn.ID][el.ID] = el
 }
 
-func (e *eventListeners) Remove(id string) {
+func (e *eventListeners) Remove(conn *Conn) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	delete(e.eh, id)
+	delete(e.el, conn.ID)
 }
 
-func (e *eventListeners) Get(id string) (EventListener, bool) {
+func (e *eventListeners) Get(id string, conn *Conn) (EventListener, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	event, ok := e.eh[id]
+	event, ok := e.el[conn.ID][id]
 	return event, ok
 }
 

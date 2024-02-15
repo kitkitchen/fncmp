@@ -86,12 +86,11 @@ class Socket {
         let path = window.location.pathname.split("");
         console.log(path)
         let path_parsed = "";
-        if (path[-1] == "/") {
+        if (path[-1] == "/" || (path.length == 1 && path[0] == "/")) {
             path.pop();
-            path_parsed = path.join("");
-        } else {
-            path_parsed = path.join("");
         }
+        path_parsed = path.join("");
+        
         if (path_parsed == "") {
             path_parsed = "/main";
         }
@@ -632,5 +631,5 @@ type EventTargetProperties = {
     value: string;
 };
 
-new Socket();
 const api = new API();
+new Socket();

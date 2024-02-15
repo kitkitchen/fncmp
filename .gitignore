@@ -4,6 +4,10 @@ main.go
 tailwindcss
 .DS_Store
 *chat
-*templ
+*templ*
 *.templ*
+.gitignore
+
+chat_templ.go
+login_templ.go
 templates.go

@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"encoding/json"
@@ -79,6 +79,7 @@ func (c *Conn) close() error {
 	if c == nil {
 		return errors.New("cannot close nil connection")
 	}
+	evtListeners.Remove(c)
 	connPool.Delete(c.ID)
 	c.websocket.Close()
 	return nil

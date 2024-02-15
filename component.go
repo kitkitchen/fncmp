@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"context"
@@ -205,6 +205,7 @@ func (f FnComponent) Now(ctx context.Context) {
 	h, ok := handlers.Get(f.dispatch.HandlerID)
 	if !ok {
 		log.Printf("error: handler '%s' not found", f.dispatch.HandlerID)
+		return
 	}
 	h.out <- f
 }
