@@ -1,6 +1,7 @@
 package fncmp
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 
@@ -95,6 +96,7 @@ const (
 )
 
 type EventListener struct {
+	context.Context
 	ID       string   `json:"id"`
 	TargetID string   `json:"target_id"`
 	Handler  HandleFn `json:"-"`
@@ -109,6 +111,7 @@ type EventListener struct {
 func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
 	id := uuid.New().String()
 	el := EventListener{
+		Context:  f.Context,
 		TargetID: f.id,
 		Handler:  h,
 		ID:       id,
@@ -149,13 +152,6 @@ func (e *eventListeners) Get(id string) (EventListener, bool) {
 	return event, ok
 }
 
-func (e *eventListeners) Every() (el []EventListener) {
-	for _, e := range e.eh {
-		el = append(el, e)
-	}
-	return
-}
-
 func UnmarshalEventData[T any](e EventListener) (T, error) {
 	var t T
 	b, err := json.Marshal(e.Data)
@@ -167,6 +163,21 @@ func UnmarshalEventData[T any](e EventListener) (T, error) {
 }
 
 // Event data types
+type EventTarget struct {
+	ID         string   `json:"id"`
+	ClassList  []string `json:"classList"`
+	TagName    string   `json:"tagName"`
+	InnerHTML  string   `json:"innerHTML"`
+	OuterHTML  string   `json:"outerHTML"`
+	Value      string   `json:"value"`
+	Checked    bool     `json:"checked"`
+	Disabled   bool     `json:"disabled"`
+	Hidden     bool     `json:"hidden"`
+	Style      string   `json:"style"`
+	Attributes []string `json:"attributes"`
+	Dataset    []string `json:"dataset"`
+}
+
 type PointerEvent struct {
 	IsTrusted        bool        `json:"isTrusted"`
 	AltKey           bool        `json:"altKey"`
@@ -289,21 +300,6 @@ type KeyboardEvent struct {
 	MetaKey          bool        `json:"metaKey"`
 	Repeat           bool        `json:"repeat"`
 	ShiftKey         bool        `json:"shiftKey"`
-}
-
-type EventTarget struct {
-	ID         string   `json:"id"`
-	ClassList  []string `json:"classList"`
-	TagName    string   `json:"tagName"`
-	InnerHTML  string   `json:"innerHTML"`
-	OuterHTML  string   `json:"outerHTML"`
-	Value      string   `json:"value"`
-	Checked    bool     `json:"checked"`
-	Disabled   bool     `json:"disabled"`
-	Hidden     bool     `json:"hidden"`
-	Style      string   `json:"style"`
-	Attributes []string `json:"attributes"`
-	Dataset    []string `json:"dataset"`
 }
 
 type FormDataEvent struct {

@@ -33,6 +33,7 @@ func NewFn(c Component) FnComponent {
 	return f
 }
 
+// TODO: render custom attributes with a helper function in the api
 func (f FnComponent) Render(ctx context.Context, w io.Writer) error {
 	w.Write([]byte(fmt.Sprint("<div id='" + f.id + "' events=" + f.dispatch.FnRender.ListenerStrings() + ">")))
 	HTML(f.dispatch.FnRender.HTML).Render(ctx, w)
@@ -60,6 +61,8 @@ func (f FnComponent) WithEvents(h HandleFn, e ...OnEvent) FnComponent {
 }
 
 func (f FnComponent) WithRedirect(url string) FnComponent {
+	//TODO: Give the option to render before redirect
+	// ie loading feedback while redirecting
 	f.dispatch.Function = Redirect
 	f.dispatch.FnRedirect.URL = url
 	return f
@@ -78,16 +81,10 @@ func (f FnComponent) JS(fn string, arg any) FnComponent {
 	return f
 }
 
-func (f FnComponent) WithID(id string) FnComponent {
-	f.id = id
-	return f
-}
-
-func (f FnComponent) WithConnID(id string) FnComponent {
-	f.dispatch.ConnID = id
-	return f
-}
-
+// WithLabel sets the label of the component
+//
+// The label may be used to identify the component in the client,
+// especially during debugging.
 func (f FnComponent) WithLabel(label string) FnComponent {
 	f.dispatch.Label = label
 	return f
