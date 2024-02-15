@@ -106,6 +106,8 @@ type EventListener struct {
 	Data            any      `json:"data"`
 }
 
+//TODO: Clean up event listeners upon connections termination
+
 // TODO update this to regular dispatch func
 // Creates a new EventListener with OnEvent for component with ID that triggers function f
 func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
