@@ -49,10 +49,21 @@ func (f FnComponent) Write(p []byte) (n int, err error) {
 
 func (f FnComponent) WithContext(ctx context.Context) FnComponent {
 	f.Context = ctx
+
+	ctxWr, ok := ctx.(ContextWithRequest)
+	if !ok {
+		log.Println("error: context not of type ContextWithRequest")
+		return f
+	}
+	details := ctxWr.dispatchDetails
+	f.dispatch.ConnID = details.ConnID
+	f.dispatch.HandlerID = details.HandlerID
+	f.dispatch.Conn = details.Conn
 	return f
 }
 
 func (f FnComponent) WithEvents(h HandleFn, e ...OnEvent) FnComponent {
+	// get connection from context
 	for _, v := range e {
 		el := NewEventListener(v, f, h)
 		f.dispatch.FnRender.EventListeners = append(f.dispatch.FnRender.EventListeners, el)
@@ -189,19 +200,15 @@ func RedirectPage(url string) FnComponent {
 }
 
 func JS(ctx context.Context, fn string, arg any) {
-	NewFn(nil).JS(fn, arg).Now(ctx)
+	NewFn(nil).JS(fn, arg).Dispatch()
 }
 
-func (f FnComponent) Now(ctx context.Context) {
-	ctxWr, ok := ctx.(*ContextWithRequest)
-	if !ok {
-		log.Println("error: context not of type *ContextWithRequest")
+func (f FnComponent) Dispatch() {
+	if f.dispatch.Conn == nil {
+		log.Println("error: connection not found")
+		log.Println("error: connection not found")
 		return
 	}
-	details := ctxWr.dispatchDetails
-	f.dispatch.ConnID = details.ConnID
-	f.dispatch.HandlerID = details.HandlerID
-	f.dispatch.Conn = details.Conn
 	h, ok := handlers.Get(f.dispatch.HandlerID)
 	if !ok {
 		log.Printf("error: handler '%s' not found", f.dispatch.HandlerID)

@@ -11,7 +11,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// TODO: use mutex to lock handlers map
+// TODO: Use a logger
+
 var handlers = handlerPool{
 	pool: make(map[string]Handler),
 }
@@ -205,7 +206,7 @@ func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
 			//TODO: write cookie
 
 			//TODO: get connection id from cookie and pass previous context
-			ctxWithRequest := &ContextWithRequest{
+			ctxWithRequest := ContextWithRequest{
 				Context: r.Context(),
 				Request: r,
 				dispatchDetails: dispatchDetails{
