@@ -12,6 +12,16 @@ import (
 type Component interface {
 	Render(ctx context.Context, w io.Writer) error
 }
+
+func RenderComponent(c ...Component) (html string) {
+	w := Writer{}
+	for _, v := range c {
+		v.Render(context.Background(), &w)
+	}
+	html = string(w.buf)
+	return html
+}
+
 type HandleFn func(context.Context) FnComponent
 
 type FnComponent struct {
@@ -47,18 +57,18 @@ func (f FnComponent) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+// FIXME: Add context in a more idiomatic way
 func (f FnComponent) WithContext(ctx context.Context) FnComponent {
 	f.Context = ctx
 
-	ctxWr, ok := ctx.(ContextWithRequest)
+	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
 	if !ok {
-		log.Println("error: context not of type ContextWithRequest")
+		log.Println("warn: context does not contain dispatch details")
 		return f
 	}
-	details := ctxWr.dispatchDetails
-	f.dispatch.ConnID = details.ConnID
-	f.dispatch.HandlerID = details.HandlerID
-	f.dispatch.Conn = details.Conn
+	f.dispatch.ConnID = dd.ConnID
+	f.dispatch.HandlerID = dd.HandlerID
+	f.dispatch.Conn = dd.Conn
 	return f
 }
 
@@ -200,12 +210,11 @@ func RedirectPage(url string) FnComponent {
 }
 
 func JS(ctx context.Context, fn string, arg any) {
-	NewFn(nil).JS(fn, arg).Dispatch()
+	NewFn(nil).JS(fn, arg).DispatchContext(ctx)
 }
 
 func (f FnComponent) Dispatch() {
 	if f.dispatch.Conn == nil {
-		log.Println("error: connection not found")
 		log.Println("error: connection not found")
 		return
 	}
@@ -217,19 +226,14 @@ func (f FnComponent) Dispatch() {
 	h.out <- f
 }
 
+func (f FnComponent) DispatchContext(ctx context.Context) {
+	f.WithContext(ctx).Dispatch()
+}
+
 // HTML implements the Component interface
 type HTML string
 
 func (h HTML) Render(ctx context.Context, w io.Writer) error {
 	_, err := w.Write([]byte(h))
 	return err
-}
-
-func RenderHTML(c ...Component) (html string) {
-	w := Writer{}
-	for _, v := range c {
-		v.Render(context.Background(), &w)
-	}
-	html = string(w.buf)
-	return html
 }

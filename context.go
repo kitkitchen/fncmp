@@ -8,13 +8,16 @@ import (
 type ContextKey string
 
 const (
-	UserKey  ContextKey = "user"
-	EventKey ContextKey = "event"
-	ErrorKey ContextKey = "error"
+	UserKey     ContextKey = "user"
+	EventKey    ContextKey = "event"
+	RequestKey  ContextKey = "request"
+	ErrorKey    ContextKey = "error"
+	dispatchKey ContextKey = "__dispatch__"
 )
 
-type ContextWithRequest struct {
+type FnContext struct {
 	context.Context
+	Event EventListener
 	*http.Request
 	dispatchDetails
 }

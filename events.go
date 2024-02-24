@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"sync"
 
 	"github.com/google/uuid"
@@ -10,7 +11,7 @@ import (
 
 type OnEvent string
 
-// Event types
+// DOM event types
 const (
 	OnAbort              OnEvent = "abort"
 	OnAnimationEnd       OnEvent = "animationend"
@@ -111,6 +112,9 @@ type EventListener struct {
 // TODO update this to regular dispatch func
 // Creates a new EventListener with OnEvent for component with ID that triggers function f
 func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
+	if f.dispatch.Conn == nil {
+		log.Fatal("error: connection not found")
+	}
 	id := uuid.New().String()
 	el := EventListener{
 		Context:  f.Context,

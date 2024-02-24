@@ -129,11 +129,7 @@ class API {
                         return;
                     return event;
                 });
-                const listeners_flat = listeners.flat();
-                const listeners_filtered = listeners_flat.filter((e) => e != null);
-                console.log("LISTENERS:");
-                console.log(listeners_filtered);
-                d.render.event_listeners = listeners_filtered;
+                d.render.event_listeners = listeners.flat().filter((e) => e != null);
                 return d;
             },
             // Element selectors
@@ -181,6 +177,7 @@ class API {
                     console.log("elem with listener: " + elem);
                     elem.addEventListener(listener.on, (ev) => {
                         ev.preventDefault();
+                        
                         console.log("EVENT LISTENER:");
                         console.log(listener.on);
                         console.log("EVENT:");
@@ -189,30 +186,35 @@ class API {
                         console.log(ev.target);
                         d.function = "event";
                         d.event = listener;
-                        switch (listener.on) {
-                            case "submit":
+                        console.log("DATA:");
+                        console.log(listener.on)
+                        console.log(["mousedown", "mouseup", "mousemove", "mouseenter"].includes(listener.on))
+                        switch (true) {
+                            case ["submit"].includes(listener.on):
                                 d = this.utils.parseFormData(ev, d);
                                 break;
-                            case "pointerdown" || "pointerup" || "pointermove" || "click" || "contextmenu" || "dblclick":
+                            case ["pointerdown", "pointerup", "pointermove", "click", "contextmenu", "dblclick"].includes(listener.on):
                                 d.event.data = ParsePointerEvent(ev);
                                 break;
-                            case "drag" || "dragend" || "dragenter" || "dragexitcapture" || "dragleave" || "dragover" || "dragstart" || "drop":
+                            case ["drag", "dragend", "dragenter", "dragexitcapture", "dragleave", "dragover", "dragstart", "drop"].includes(listener.on):
                                 d.event.data = ParseDragEvent(ev);
                                 break;
-                            case "mousedown" || "mouseup" || "mousemove":
+                            case ["mousedown", "mouseup", "mousemove", "mouseenter"].includes(listener.on):
+                                console.log("MOUSE EVENT!!!!!!!!!!!!!!");
                                 d.event.data = ParseMouseEvent(ev);
                                 break;
-                            case "keydown" || "keyup" || "keypress":
+                            case ["keydown", "keyup", "keypress"].includes(listener.on):
                                 d.event.data = ParseKeyboardEvent(ev);
                                 break;
-                            case "change" || "input" || "invalid" || "reset" || "search" || "select" || "focus" || "blur" || "copy" || "cut" || "paste":
+                            case ["change", "input", "invalid", "reset", "search", "select", "focus", "blur", "copy", "cut", "paste"].includes(listener.on):
                                 d.event.data = ParseEventTarget(ev.target);
                                 break;
-                            case "touchstart" || "touchend" || "touchmove" || "touchcancel":
+                            case ["touchstart", "touchend", "touchmove", "touchcancel"].includes(listener.on):
                                 d.event.data = ParseTouchEvent(ev);
                                 break;
                             default:
-                                d.event.data = ParseEventTarget(ev.target);
+                                
+                                // d.event.data = ParseEventTarget(ev.target);
                         }
                         console.log("DISPATCH:");
                         console.log(d);
@@ -276,7 +278,6 @@ function ParsePointerEvent(ev) {
         clientY: ev.clientY,
         composed: ev.composed,
         ctrlKey: ev.ctrlKey,
-        currentTarget: ParseEventTarget(ev.currentTarget),
         defaultPrevented: ev.defaultPrevented,
         detail: ev.detail,
         eventPhase: ev.eventPhase,
@@ -292,7 +293,6 @@ function ParsePointerEvent(ev) {
         pointerId: ev.pointerId,
         pointerType: ev.pointerType,
         pressure: ev.pressure,
-        relatedTarget: ParseEventTarget(ev.relatedTarget),
     };
 }
 function ParseTouchEvent(ev) {
@@ -333,7 +333,6 @@ function ParseDragEvent(ev) {
         clientY: ev.clientY,
         composed: ev.composed,
         ctrlKey: ev.ctrlKey,
-        currentTarget: ParseEventTarget(ev.currentTarget),
         defaultPrevented: ev.defaultPrevented,
         detail: ev.detail,
         eventPhase: ev.eventPhase,
@@ -344,7 +343,6 @@ function ParseDragEvent(ev) {
         offsetY: ev.offsetY,
         pageX: ev.pageX,
         pageY: ev.pageY,
-        relatedTarget: ParseEventTarget(ev.relatedTarget),
     };
 }
 function ParseMouseEvent(ev) {
@@ -359,7 +357,6 @@ function ParseMouseEvent(ev) {
         clientY: ev.clientY,
         composed: ev.composed,
         ctrlKey: ev.ctrlKey,
-        currentTarget: ParseEventTarget(ev.currentTarget),
         defaultPrevented: ev.defaultPrevented,
         detail: ev.detail,
         eventPhase: ev.eventPhase,
@@ -370,7 +367,6 @@ function ParseMouseEvent(ev) {
         offsetY: ev.offsetY,
         pageX: ev.pageX,
         pageY: ev.pageY,
-        relatedTarget: ParseEventTarget(ev.relatedTarget),
     };
 }
 function ParseKeyboardEvent(ev) {
@@ -382,7 +378,6 @@ function ParseKeyboardEvent(ev) {
         code: ev.code,
         composed: ev.composed,
         ctrlKey: ev.ctrlKey,
-        currentTarget: ParseEventTarget(ev.currentTarget),
         defaultPrevented: ev.defaultPrevented,
         detail: ev.detail,
         eventPhase: ev.eventPhase,

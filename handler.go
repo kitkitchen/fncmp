@@ -102,6 +102,10 @@ func (h *Handler) listen() {
 
 // TODO: these should be Dispatch receiver methods
 func (h Handler) Render(fn FnComponent) {
+	// If there is no HTML to render, cancel dispatch
+	if len(fn.dispatch.buf) == 0 && fn.dispatch.FnRender.HTML == "" {
+		return
+	}
 	var data Writer
 	fn.Render(context.Background(), &data)
 	fn.dispatch.FnRender.HTML = SanitizeHTML(string(data.buf))
@@ -136,15 +140,8 @@ func (h Handler) Event(d Dispatch) {
 		return
 	}
 	listener.Data = d.FnEvent.Data
-	ctx := ContextWithRequest{
-		Context: context.WithValue(context.Background(), EventKey, listener),
-		Request: nil,
-		dispatchDetails: dispatchDetails{
-			ConnID:    d.ConnID,
-			Conn:      d.Conn,
-			HandlerID: h.id,
-		},
-	}
+
+	ctx := context.WithValue(listener.Context, EventKey, listener)
 	response := listener.Handler(ctx)
 	response.dispatch.Conn = d.Conn
 	response.dispatch.HandlerID = d.HandlerID
@@ -163,14 +160,6 @@ type Writer struct {
 func (w *Writer) Write(p []byte) (n int, err error) {
 	w.buf = append(w.buf, p...)
 	return len(p), nil
-}
-
-func MiddleWareDispatch(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-
-		// Get route and pass to handler with information
-		next(w, r)
-	}
 }
 
 func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
@@ -206,17 +195,25 @@ func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
 			//TODO: write cookie
 
 			//TODO: get connection id from cookie and pass previous context
-			ctxWithRequest := ContextWithRequest{
-				Context: r.Context(),
-				Request: r,
-				dispatchDetails: dispatchDetails{
-					ConnID:    id,
-					Conn:      newConnection,
-					HandlerID: handler.id,
-				},
-			}
 
-			fn := hf(ctxWithRequest)
+			ctx := context.WithValue(r.Context(), dispatchKey, dispatchDetails{
+				ConnID:    id,
+				Conn:      newConnection,
+				HandlerID: handler.id,
+			})
+			ctx = context.WithValue(ctx, RequestKey, r)
+
+			// fnContext := FnContext{
+			// 	Context: r.Context(),
+			// 	Request: r,
+			// 	dispatchDetails: dispatchDetails{
+			// 		ConnID:    id,
+			// 		Conn:      newConnection,
+			// 		HandlerID: handler.id,
+			// 	},
+			// }
+
+			fn := hf(ctx)
 			fn.dispatch.Conn = newConnection
 			fn.dispatch.ConnID = id
 			fn.dispatch.HandlerID = handler.id
