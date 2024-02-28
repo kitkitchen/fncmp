@@ -112,7 +112,7 @@ type EventListener struct {
 // TODO update this to regular dispatch func
 // Creates a new EventListener with OnEvent for component with ID that triggers function f
 func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
-	if f.dispatch.Conn == nil {
+	if f.dispatch.conn == nil {
 		log.Fatal("error: connection not found")
 	}
 	id := uuid.New().String()
@@ -123,7 +123,7 @@ func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
 		Handler:  h,
 		On:       on,
 	}
-	evtListeners.Add(f.dispatch.Conn, el)
+	evtListeners.Add(f.dispatch.conn, el)
 	return el
 }
 
@@ -138,7 +138,7 @@ var evtListeners = eventListeners{
 	el: make(map[string]map[string]EventListener),
 }
 
-func (e *eventListeners) Add(conn *Conn, el EventListener) {
+func (e *eventListeners) Add(conn *conn, el EventListener) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if _, ok := e.el[conn.ID]; !ok {
@@ -147,13 +147,13 @@ func (e *eventListeners) Add(conn *Conn, el EventListener) {
 	e.el[conn.ID][el.ID] = el
 }
 
-func (e *eventListeners) Remove(conn *Conn) {
+func (e *eventListeners) Remove(conn *conn) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	delete(e.el, conn.ID)
 }
 
-func (e *eventListeners) Get(id string, conn *Conn) (EventListener, bool) {
+func (e *eventListeners) Get(id string, conn *conn) (EventListener, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	event, ok := e.el[conn.ID][id]

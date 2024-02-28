@@ -129,11 +129,11 @@ func (h Handler) MarshalAndPublish(d Dispatch) {
 		h.Error(d)
 		return
 	}
-	d.Conn.Publish(b)
+	d.conn.Publish(b)
 }
 
 func (h Handler) Event(d Dispatch) {
-	listener, ok := evtListeners.Get(d.FnEvent.ID, d.Conn)
+	listener, ok := evtListeners.Get(d.FnEvent.ID, d.conn)
 	if !ok {
 		d.FnError.Message = fmt.Sprintf("error: event listener with id '%s' not found", d.FnEvent.ID)
 		h.Error(d)
@@ -143,7 +143,7 @@ func (h Handler) Event(d Dispatch) {
 
 	ctx := context.WithValue(listener.Context, EventKey, listener)
 	response := listener.Handler(ctx)
-	response.dispatch.Conn = d.Conn
+	response.dispatch.conn = d.conn
 	response.dispatch.HandlerID = d.HandlerID
 	h.out <- response
 }
@@ -183,7 +183,7 @@ func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
 
 			w.Write(writer.buf)
 		} else {
-			newConnection, err := NewConn(w, r, handler.id, id)
+			newConnection, err := newConn(w, r, handler.id, id)
 			if err != nil {
 				log.Println("error: failed to create new connection")
 				log.Println(err)
@@ -214,7 +214,7 @@ func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
 			// }
 
 			fn := hf(ctx)
-			fn.dispatch.Conn = newConnection
+			fn.dispatch.conn = newConnection
 			fn.dispatch.ConnID = id
 			fn.dispatch.HandlerID = handler.id
 			handler.out <- fn

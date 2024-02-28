@@ -57,7 +57,7 @@ func newDispatch(key string) *Dispatch {
 
 type Dispatch struct {
 	buf        []byte        `json:"-"`
-	Conn       *Conn         `json:"-"`
+	conn       *conn         `json:"-"`
 	ID         string        `json:"id"`
 	Key        string        `json:"key"`
 	ConnID     string        `json:"conn_id"`

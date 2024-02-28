@@ -68,7 +68,7 @@ func (f FnComponent) WithContext(ctx context.Context) FnComponent {
 	}
 	f.dispatch.ConnID = dd.ConnID
 	f.dispatch.HandlerID = dd.HandlerID
-	f.dispatch.Conn = dd.Conn
+	f.dispatch.conn = dd.Conn
 	return f
 }
 
@@ -214,7 +214,7 @@ func JS(ctx context.Context, fn string, arg any) {
 }
 
 func (f FnComponent) Dispatch() {
-	if f.dispatch.Conn == nil {
+	if f.dispatch.conn == nil {
 		log.Println("error: connection not found")
 		return
 	}
