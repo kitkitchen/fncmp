@@ -19,6 +19,7 @@ const (
 	HTMLTag Tag = "html"
 	Head    Tag = "head"
 	Body    Tag = "body"
+	Main    Tag = "main"
 )
 
 type (
