@@ -10,8 +10,8 @@ minify:
 	./es-build
 
 compile: templ
-	./es-build
 	tsc -p "static/assets/"
+	./es-build
 	./tailwindcss -i static/assets/stylesheets/tailwind.css -o static/assets/stylesheets/tailwind.min.css --minify
 	sass static/assets/sass:static/assets/stylesheets
 
