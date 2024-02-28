@@ -24,6 +24,6 @@ type FnContext struct {
 
 type dispatchDetails struct {
 	ConnID    string
-	Conn      *Conn
+	Conn      *conn
 	HandlerID string
 }
