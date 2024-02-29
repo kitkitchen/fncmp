@@ -62,9 +62,6 @@ class Socket {
     private key: string | undefined = undefined;
 
     constructor() {
-        if (this.addr) {
-            throw new Error("ws: already connected to server...");
-        }
         let key = localStorage.getItem("fncmp_key");
         if (!key) {
             key = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
@@ -99,11 +96,9 @@ class Socket {
             throw new Error("ws: failed to connect to server...");
         }
 
-        this.ws.onopen = function () {
-            document.getElementById('fncmp_script').remove();
-        };
+        this.ws.onopen = function () {};
         this.ws.onclose = function () {};
-        this.ws.onerror = function (e) {};
+        this.ws.onerror = function () {};
 
         this.ws.onmessage = function (event) {
             let d = JSON.parse(event.data) as Dispatch;
@@ -218,17 +213,6 @@ class API {
             const formData = new FormData(form);
             d.event.data = Object.fromEntries(formData.entries());
             return d;
-        },
-        getElementByAttribute: (attribute: string) =>
-            document.querySelectorAll(`[${attribute}]`),
-        trackTouch: (elem: HTMLElement) => {
-            elem.addEventListener("touchstart", (ev) => {
-                ev.preventDefault();
-                elem.classList.add("touch");
-            });
-            elem.addEventListener("touchend", (ev) => {
-                elem.classList.remove("touch");
-            });
         },
         getAttributes: (elem: Element, attribute: string): string[] => {
             const elems = elem.querySelectorAll(`[${attribute}]`);

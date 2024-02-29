@@ -1,25 +1,24 @@
-package main
+package fncmp
 
 import "encoding/json"
 
-type FunctionName string
+type functionName string
 
 const (
-	initialize FunctionName = "initialize"
-	Render     FunctionName = "render"
-	Redirect   FunctionName = "redirect"
-	Event      FunctionName = "event"
-	Custom     FunctionName = "custom"
-	Error      FunctionName = "error"
+	render   functionName = "render"
+	redirect functionName = "redirect"
+	event    functionName = "event"
+	custom   functionName = "custom"
+	_error   functionName = "error"
 )
 
 type Tag string
 
 const (
 	HTMLTag Tag = "html"
-	Head    Tag = "head"
-	Body    Tag = "body"
-	Main    Tag = "main"
+	HeadTag Tag = "head"
+	BodyTag Tag = "body"
+	MainTag Tag = "main"
 )
 
 type (
@@ -45,16 +44,15 @@ type (
 	}
 )
 
-func (fn FnError) Error() string {
-	return fn.Message
-}
-
 func newDispatch(key string) *Dispatch {
 	return &Dispatch{
 		Key: key,
 	}
 }
 
+// Dispatch contains necessary data for the web api.
+//
+// While this struct is exported, it is not intended to be used directly and is not exposed during runtime.
 type Dispatch struct {
 	buf        []byte        `json:"-"`
 	conn       *conn         `json:"-"`
@@ -64,7 +62,7 @@ type Dispatch struct {
 	HandlerID  string        `json:"handler_id"`
 	Action     string        `json:"action"`
 	Label      string        `json:"label"`
-	Function   FunctionName  `json:"function"`
+	Function   functionName  `json:"function"`
 	FnEvent    EventListener `json:"event"`
 	FnRender   FnRender      `json:"render"`
 	FnRedirect FnRedirect    `json:"redirect"`

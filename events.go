@@ -1,4 +1,4 @@
-package main
+package fncmp
 
 import (
 	"context"
@@ -147,7 +147,7 @@ func (e *eventListeners) Add(conn *conn, el EventListener) {
 	e.el[conn.ID][el.ID] = el
 }
 
-func (e *eventListeners) Remove(conn *conn) {
+func (e *eventListeners) Delete(conn *conn) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	delete(e.el, conn.ID)
