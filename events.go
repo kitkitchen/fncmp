@@ -1,9 +1,8 @@
-package fncmp
+package main
 
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"sync"
 
 	"github.com/google/uuid"
@@ -102,18 +101,12 @@ type EventListener struct {
 	TargetID        string   `json:"target_id"`
 	Handler         HandleFn `json:"-"`
 	On              OnEvent  `json:"on"`
-	Action          string   `json:"action"`
-	Method          string   `json:"method"`
 	Data            any      `json:"data"`
 }
 
-//TODO: Clean up event listeners upon connections termination
-
-// TODO update this to regular dispatch func
-// Creates a new EventListener with OnEvent for component with ID that triggers function f
-func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
+func newEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
 	if f.dispatch.conn == nil {
-		log.Fatal("error: connection not found")
+		config.Logger.Error("connection not found")
 	}
 	id := uuid.New().String()
 	el := EventListener{
@@ -128,7 +121,6 @@ func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
 }
 
 // Store and retrieve event listeners
-
 type eventListeners struct {
 	mu sync.Mutex
 	el map[string]map[string]EventListener
@@ -160,6 +152,7 @@ func (e *eventListeners) Get(id string, conn *conn) (EventListener, bool) {
 	return event, ok
 }
 
+// UnmarshalEventData unmarshals event listener data T from the client
 func UnmarshalEventData[T any](e EventListener) (T, error) {
 	var t T
 	b, err := json.Marshal(e.Data)

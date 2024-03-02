@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"encoding/json"
@@ -46,8 +46,6 @@ type (
 	}
 )
 
-// NewConn upgrades an http connection to a websocket connection and returns a Conn
-// or an error if the upgrade fails.
 func newConn(w http.ResponseWriter, r *http.Request, handlerID string, ID string) (*conn, error) {
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -73,13 +71,10 @@ func newConn(w http.ResponseWriter, r *http.Request, handlerID string, ID string
 	return c, nil
 }
 
-// Close closes the websocket connection and removes the Conn from the pool.
-// It returns an error if the Conn is nil.
 func (c *conn) close() error {
 	if c == nil {
 		return errors.New("cannot close nil connection")
 	}
-	handlers.Delete(c.HandlerID)
 	evtListeners.Delete(c)
 	connPool.Delete(c.ID)
 	c.websocket.Close()
@@ -89,7 +84,7 @@ func (c *conn) close() error {
 func (c *conn) listen() {
 	go func(c *conn) {
 		defer c.close()
-		// Listen for messages on the Conn's Messages channel
+		// Listen for messages on conn's Messages channel
 		var dispatch Dispatch
 		for {
 			_, message, err := c.websocket.ReadMessage()
@@ -132,7 +127,7 @@ func (c *conn) listen() {
 		}
 
 		if err := c.websocket.WriteMessage(1, msg); err != nil {
-			log.Printf("error: %v", err)
+			config.Logger.Error("error writing message", "error", err)
 			c.close()
 		}
 	}
@@ -142,7 +137,7 @@ func (c *conn) Publish(msg []byte) {
 	// if msg is not json encodable, return
 	_, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("error: %v", err)
+		config.Logger.Error("error: message not json encodable", "error", err)
 		return
 	}
 	c.Messages <- msg

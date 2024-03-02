@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import "encoding/json"
 
@@ -70,7 +70,7 @@ type Dispatch struct {
 	FnError    FnError       `json:"error"`
 }
 
-func (f *FnRender) ListenerStrings() string {
+func (f *FnRender) listenerStrings() string {
 	b, err := json.Marshal(f.EventListeners)
 	if err != nil {
 		return ""

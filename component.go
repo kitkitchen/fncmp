@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"context"
@@ -9,21 +9,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// The Component interface is implemented by types that can be rendered
 type Component interface {
 	Render(ctx context.Context, w io.Writer) error
 }
 
-// RenderComponent is a helper function that takes a list of components and renders them to a string
-//
-// Example:
-// 	html := RenderComponent(
-// 		HTML("<h1>Hello, world!</h1>"),
-// 		HTML("<p>This is a paragraph</p>"),
-// 	)
-// 	fmt.Println(html)
-// 	// Output:
-// 	// <h1>Hello, world!</h1><p>This is a paragraph</p>
-
+// RenderComponent renders a component and returns the HTML string
 func RenderComponent(c ...Component) (html string) {
 	w := Writer{}
 	for _, v := range c {
@@ -33,12 +24,15 @@ func RenderComponent(c ...Component) (html string) {
 	return html
 }
 
+// FnComponent is a functional component that can be rendered and dispatched
+// to the client
 type FnComponent struct {
 	context.Context
 	dispatch *Dispatch
 	id       string
 }
 
+// NewFn creates a new FnComponent from a Component
 func NewFn(c Component) FnComponent {
 	id := "fncmp-" + uuid.New().String()
 	f := FnComponent{
@@ -52,25 +46,28 @@ func NewFn(c Component) FnComponent {
 	return f
 }
 
+// Render renders the FnComponent with necessary metadata for the client
 func (f FnComponent) Render(ctx context.Context, w io.Writer) error {
-	w.Write([]byte(fmt.Sprint("<div id='" + f.id + "' label='" + f.dispatch.Label + "' events=" + f.dispatch.FnRender.ListenerStrings() + ">")))
+	w.Write([]byte(fmt.Sprint("<div id='" + f.id + "' label='" + f.dispatch.Label + "' events=" + f.dispatch.FnRender.listenerStrings() + ">")))
 	HTML(f.dispatch.FnRender.HTML).Render(ctx, w)
 	w.Write(f.dispatch.buf)
 	w.Write([]byte("</div>"))
 	return nil
 }
 
+// Write writes to the FnComponent's buffer
 func (f FnComponent) Write(p []byte) (n int, err error) {
 	f.dispatch.buf = append(f.dispatch.buf, p...)
 	return len(p), nil
 }
 
+// WithContext sets the context of the FnComponent
 func (f FnComponent) WithContext(ctx context.Context) FnComponent {
 	f.Context = ctx
 
 	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
 	if !ok {
-		log.Warn("context does not contain dispatch details")
+		config.Logger.Warn("context does not contain dispatch details")
 		return f
 	}
 	f.dispatch.ConnID = dd.ConnID
@@ -79,27 +76,31 @@ func (f FnComponent) WithContext(ctx context.Context) FnComponent {
 	return f
 }
 
+// WithEvents sets the event listeners of the FnComponent with variadic OnEvent
 func (f FnComponent) WithEvents(h HandleFn, e ...OnEvent) FnComponent {
 	// get connection from context
 	for _, v := range e {
-		el := NewEventListener(v, f, h)
+		el := newEventListener(v, f, h)
 		f.dispatch.FnRender.EventListeners = append(f.dispatch.FnRender.EventListeners, el)
 	}
 	return f
 }
 
+// WithRedirect sets the FnComponent to redirect to a URL
 func (f FnComponent) WithRedirect(url string) FnComponent {
 	f.dispatch.Function = redirect
 	f.dispatch.FnRedirect.URL = url
 	return f
 }
 
+// WithError sets the FnComponent to render an error
 func (f FnComponent) WithError(err error) FnComponent {
 	f.dispatch.Function = _error
 	f.dispatch.FnError.Message = err.Error()
 	return f
 }
 
+// JS sets the FnComponent to run a custom JavaScript function
 func (f FnComponent) JS(fn string, arg any) FnComponent {
 	f.dispatch.Function = custom
 	f.dispatch.FnCustom.Function = fn
@@ -116,16 +117,7 @@ func (f FnComponent) WithLabel(label string) FnComponent {
 	return f
 }
 
-func (f FnComponent) WithTargetID(id string) FnComponent {
-	f.dispatch.FnRender.TargetID = id
-	return f
-}
-
-func (f FnComponent) WithTag(tag Tag) FnComponent {
-	f.dispatch.FnRender.Tag = tag
-	return f
-}
-
+// AppendTag appends the rendered component to a tag in the DOM
 func (f FnComponent) AppendTag(t Tag) FnComponent {
 	f.dispatch.Function = render
 	f.dispatch.FnRender.Tag = t
@@ -136,6 +128,7 @@ func (f FnComponent) AppendTag(t Tag) FnComponent {
 	return f
 }
 
+// PrependTag prepends the rendered component to a tag in the DOM
 func (f FnComponent) PrependTag(t Tag) FnComponent {
 	f.dispatch.Function = render
 	f.dispatch.FnRender.Tag = t
@@ -146,6 +139,7 @@ func (f FnComponent) PrependTag(t Tag) FnComponent {
 	return f
 }
 
+// SwapTagOuter swaps the rendered component with a tag in the DOM
 func (f FnComponent) SwapTagOuter(t Tag) FnComponent {
 	f.dispatch.Function = render
 	f.dispatch.FnRender.Tag = t
@@ -156,6 +150,7 @@ func (f FnComponent) SwapTagOuter(t Tag) FnComponent {
 	return f
 }
 
+// SwapTagInner swaps the inner HTML of a tag in the DOM with the rendered component
 func (f FnComponent) SwapTagInner(t Tag) FnComponent {
 	f.dispatch.Function = render
 	f.dispatch.FnRender.Tag = t
@@ -166,7 +161,8 @@ func (f FnComponent) SwapTagInner(t Tag) FnComponent {
 	return f
 }
 
-func (f FnComponent) AppendTarget(id string) FnComponent {
+// AppendTarget appends the rendered component to an element by ID in the DOM
+func (f FnComponent) AppendElement(id string) FnComponent {
 	f.dispatch.Function = render
 	f.dispatch.FnRender.Tag = ""
 	f.dispatch.FnRender.TargetID = id
@@ -177,7 +173,8 @@ func (f FnComponent) AppendTarget(id string) FnComponent {
 	return f
 }
 
-func (f FnComponent) PrependTarget(id string) FnComponent {
+// PrependTarget prepends the rendered component to an element by ID in the DOM
+func (f FnComponent) PrependElement(id string) FnComponent {
 	f.dispatch.Function = render
 	f.dispatch.FnRender.Tag = ""
 	f.dispatch.FnRender.TargetID = id
@@ -188,7 +185,8 @@ func (f FnComponent) PrependTarget(id string) FnComponent {
 	return f
 }
 
-func (f FnComponent) SwapTargetOuter(id string) FnComponent {
+// SwapElementOuter swaps the rendered component with an element by ID in the DOM
+func (f FnComponent) SwapElementOuter(id string) FnComponent {
 	f.dispatch.Function = render
 	f.dispatch.FnRender.Tag = ""
 	f.dispatch.FnRender.TargetID = id
@@ -199,7 +197,8 @@ func (f FnComponent) SwapTargetOuter(id string) FnComponent {
 	return f
 }
 
-func (f FnComponent) SwapTargetInner(id string) FnComponent {
+// SwapElementInner swaps the inner HTML of an element by ID in the DOM with the rendered component
+func (f FnComponent) SwapElementInner(id string) FnComponent {
 	f.dispatch.Function = render
 	f.dispatch.FnRender.Tag = ""
 	f.dispatch.FnRender.TargetID = id
@@ -210,6 +209,7 @@ func (f FnComponent) SwapTargetInner(id string) FnComponent {
 	return f
 }
 
+// Dispatch immediately sends the FnComponent to the client
 func (f FnComponent) Dispatch() {
 	if f.dispatch.conn == nil {
 		log.Error("invalid dispatch", "conn", "nil")
@@ -223,27 +223,30 @@ func (f FnComponent) Dispatch() {
 	h.out <- f
 }
 
-func RedirectURL(url string) FnComponent {
-	return NewFn(nil).WithRedirect(url)
+// RedirectURL redirects the client to the given url when returned from a handler
+func RedirectURL(ctx context.Context, url string) FnComponent {
+	return NewFn(nil).WithContext(ctx).WithRedirect(url)
 }
 
+// JS runs a custom JavaScript function on the client
 func JS(ctx context.Context, fn string, arg any) {
 	NewFn(nil).JS(fn, arg).DispatchContext(ctx)
 }
 
+// DispatchContext immediately sends the FnComponent to the client
 func (f FnComponent) DispatchContext(ctx context.Context) {
 	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
 	if !ok {
-		log.Error("context does not contain dispatch details")
+		config.Logger.Error("context does not contain dispatch details")
 	}
 	if dd.Conn == nil || dd.HandlerID == "" {
-		log.Error("invalid dispatch", "conn", dd.Conn, "handler", dd.HandlerID)
+		config.Logger.Error("invalid dispatch", "conn", dd.Conn, "handler", dd.HandlerID)
 		return
 	}
 	f.WithContext(ctx).Dispatch()
 }
 
-// HTML implements the Component interface
+// HTML implements the Component interface for a string of HTML
 type HTML string
 
 func (h HTML) Render(ctx context.Context, w io.Writer) error {

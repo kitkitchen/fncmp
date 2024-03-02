@@ -1,15 +1,11 @@
-package fncmp
+package main
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"sync"
-	"time"
-
-	"github.com/charmbracelet/log"
 
 	"github.com/google/uuid"
 )
@@ -50,21 +46,14 @@ type handler struct {
 	in        chan Dispatch
 	out       chan FnComponent
 	handlesFn map[string]HandleFn
-	logger    log.Logger
 }
 
-func NewHandler() *handler {
+func newHandler() *handler {
 	handler := handler{
 		id:        uuid.New().String(),
 		in:        make(chan Dispatch, 1028),
 		out:       make(chan FnComponent, 1028),
 		handlesFn: make(map[string]HandleFn),
-		logger: *log.NewWithOptions(os.Stderr, log.Options{
-			ReportCaller:    true,
-			ReportTimestamp: true,
-			TimeFormat:      time.Kitchen,
-			Prefix:          "FnCmp: ",
-		}),
 	}
 	handlers.Set(handler.id, handler)
 	return &handler
@@ -118,7 +107,7 @@ func (h handler) Render(fn FnComponent) {
 	}
 	var data Writer
 	fn.Render(context.Background(), &data)
-	fn.dispatch.FnRender.HTML = SanitizeHTML(string(data.buf))
+	fn.dispatch.FnRender.HTML = sanitizeHTML(string(data.buf))
 	h.MarshalAndPublish(*fn.dispatch)
 }
 
@@ -153,6 +142,11 @@ func (h handler) MarshalAndPublish(d Dispatch) {
 }
 
 func (h handler) Event(d Dispatch) {
+	if d.conn == nil {
+		d.FnError.Message = "connection not found"
+		h.Error(d)
+		return
+	}
 	listener, ok := evtListeners.Get(d.FnEvent.ID, d.conn)
 	if !ok {
 		d.FnError.Message = fmt.Sprintf("event listener with id '%s' not found", d.FnEvent.ID)
@@ -169,8 +163,10 @@ func (h handler) Event(d Dispatch) {
 }
 
 func (h handler) Error(d Dispatch) {
-
-	log.Error(d.FnError)
+	if config.Silent {
+		return
+	}
+	config.Logger.Error(d.FnError)
 }
 
 type Writer struct {
@@ -184,38 +180,24 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 }
 
 func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
-	//FIXME: This should be stored more gracefully
-	// newConns := make(map[string]context.Context)
-	handler := NewHandler()
+	handler := newHandler()
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		//TODO: keep cookies for session management
-
-		// srvAddr := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
-
-		// get id url param:
 		id := r.URL.Query().Get("fncmp_id")
 		if id == "" {
 			writer := Writer{ResponseWriter: w}
 			h(&writer, r)
-			// hf(r.Context()).Render(r.Context(), &writer)
-
-			//TODO: inject local storage script to store id for websocket
-
 			w.Write(writer.buf)
 		} else {
 			newConnection, err := newConn(w, r, handler.id, id)
 			if err != nil {
-				log.Error("failed to create new connection")
-				log.Error(err)
+				config.Logger.Error("failed to create new connection")
+				config.Logger.Error(err)
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("error: failed to create new connection"))
 				return
 			}
 			newConnection.HandlerID = handler.id
-			//TODO: write cookie
-
-			//TODO: get connection id from cookie and pass previous context
 
 			ctx := context.WithValue(r.Context(), dispatchKey, dispatchDetails{
 				ConnID:    id,
