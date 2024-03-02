@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"encoding/json"
@@ -11,17 +11,17 @@ import (
 )
 
 var connPool = conns{
-	pool: make(map[string]*Conn),
+	pool: make(map[string]*conn),
 }
 
-func (c *conns) Get(id string) (*Conn, bool) {
+func (c *conns) Get(id string) (*conn, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	conn, ok := c.pool[id]
 	return conn, ok
 }
 
-func (c *conns) Set(id string, conn *Conn) {
+func (c *conns) Set(id string, conn *conn) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.pool[id] = conn
@@ -36,9 +36,9 @@ func (c *conns) Delete(id string) {
 type (
 	conns struct {
 		mu   sync.Mutex
-		pool map[string]*Conn
+		pool map[string]*conn
 	}
-	Conn struct {
+	conn struct {
 		websocket *websocket.Conn
 		ID        string
 		HandlerID string
@@ -46,9 +46,7 @@ type (
 	}
 )
 
-// NewConn upgrades an http connection to a websocket connection and returns a Conn
-// or an error if the upgrade fails.
-func NewConn(w http.ResponseWriter, r *http.Request, handlerID string, ID string) (*Conn, error) {
+func newConn(w http.ResponseWriter, r *http.Request, handlerID string, ID string) (*conn, error) {
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			// TODO: check cookie for session id
@@ -63,7 +61,7 @@ func NewConn(w http.ResponseWriter, r *http.Request, handlerID string, ID string
 		return nil, errors.New("failed to upgrade connection")
 	}
 
-	c := &Conn{
+	c := &conn{
 		websocket: websocket,
 		ID:        ID,
 		HandlerID: handlerID,
@@ -73,21 +71,20 @@ func NewConn(w http.ResponseWriter, r *http.Request, handlerID string, ID string
 	return c, nil
 }
 
-// Close closes the websocket connection and removes the Conn from the pool.
-// It returns an error if the Conn is nil.
-func (c *Conn) close() error {
+func (c *conn) close() error {
 	if c == nil {
 		return errors.New("cannot close nil connection")
 	}
+	evtListeners.Delete(c)
 	connPool.Delete(c.ID)
 	c.websocket.Close()
 	return nil
 }
 
-func (c *Conn) listen() {
-	go func(c *Conn) {
+func (c *conn) listen() {
+	go func(c *conn) {
 		defer c.close()
-		// Listen for messages on the Conn's Messages channel
+		// Listen for messages on conn's Messages channel
 		var dispatch Dispatch
 		for {
 			_, message, err := c.websocket.ReadMessage()
@@ -115,8 +112,8 @@ func (c *Conn) listen() {
 				log.Printf("error: handler '%s' not found", dispatch.HandlerID)
 				continue
 			}
-			// Set Conn on dispatch
-			dispatch.Conn = c
+			// Set conn on dispatch
+			dispatch.conn = c
 			// Dispatch to handler
 			handler.in <- dispatch
 		}
@@ -130,23 +127,23 @@ func (c *Conn) listen() {
 		}
 
 		if err := c.websocket.WriteMessage(1, msg); err != nil {
-			log.Printf("error: %v", err)
+			config.Logger.Error("error writing message", "error", err)
 			c.close()
 		}
 	}
 }
 
-func (c *Conn) Publish(msg []byte) {
+func (c *conn) Publish(msg []byte) {
 	// if msg is not json encodable, return
 	_, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("error: %v", err)
+		config.Logger.Error("error: message not json encodable", "error", err)
 		return
 	}
 	c.Messages <- msg
 }
 
-func (c *Conn) Write(p []byte) (n int, err error) {
+func (c *conn) Write(p []byte) (n int, err error) {
 	c.Messages <- p
 	return len(p), nil
 }

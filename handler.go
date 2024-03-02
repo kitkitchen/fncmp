@@ -1,34 +1,32 @@
-package fncmp
+package main
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 
 	"github.com/google/uuid"
 )
 
-// TODO: use mutex to lock handlers map
 var handlers = handlerPool{
-	pool: make(map[string]Handler),
+	pool: make(map[string]handler),
 }
 
 type handlerPool struct {
 	mu   sync.Mutex
-	pool map[string]Handler
+	pool map[string]handler
 }
 
-func (h *handlerPool) Get(id string) (Handler, bool) {
+func (h *handlerPool) Get(id string) (handler, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	handler, ok := h.pool[id]
 	return handler, ok
 }
 
-func (h *handlerPool) Set(id string, handler Handler) {
+func (h *handlerPool) Set(id string, handler handler) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.pool[id] = handler
@@ -40,40 +38,38 @@ func (h *handlerPool) Delete(id string) {
 	delete(h.pool, id)
 }
 
-type Handler struct {
+type HandleFn func(context.Context) FnComponent
+
+type handler struct {
 	http.Handler
-	id          string
-	in          chan Dispatch
-	out         chan FnComponent
-	handlesFn   map[string]HandleFn
-	handlesHTTP map[string]http.HandlerFunc
+	id        string
+	in        chan Dispatch
+	out       chan FnComponent
+	handlesFn map[string]HandleFn
 }
 
-func NewHandler() *Handler {
-	handler := Handler{
-		id:          uuid.New().String(),
-		in:          make(chan Dispatch, 1028),
-		out:         make(chan FnComponent, 1028),
-		handlesFn:   make(map[string]HandleFn),
-		handlesHTTP: make(map[string]http.HandlerFunc),
+func newHandler() *handler {
+	handler := handler{
+		id:        uuid.New().String(),
+		in:        make(chan Dispatch, 1028),
+		out:       make(chan FnComponent, 1028),
+		handlesFn: make(map[string]HandleFn),
 	}
 	handlers.Set(handler.id, handler)
 	return &handler
 }
 
-func (h Handler) ID() string {
+func (h handler) ID() string {
 	return h.id
 }
 
-// Dispatch handles the routing of a Dispatch to the appropriate function.
-// It is called by the Conn's listen method.
-func (h *Handler) listen() {
-	go func(h *Handler) {
+func (h *handler) listen() {
+	go func(h *handler) {
 		for d := range h.in {
 			switch d.Function {
-			case Event:
+			case event:
 				h.Event(d)
-			case Error:
+			case _error:
 				h.Error(d)
 			default:
 				d.FnError.Message = fmt.Sprintf(
@@ -83,75 +79,94 @@ func (h *Handler) listen() {
 			}
 		}
 	}(h)
-	go func(h *Handler) {
+	go func(h *handler) {
 		for fn := range h.out {
 			switch fn.dispatch.Function {
-			case Render:
+			case render:
 				h.Render(fn)
-			case Redirect:
+			case redirect:
 				h.Redirect(fn)
-			case Custom:
+			case custom:
 				h.Custom(fn)
-			case Error:
+			case _error:
 				h.Error(*fn.dispatch)
+			default:
+				fn.dispatch.FnError.Message = fmt.Sprintf(
+					"function '%s' found, expected event or error on 'in' channel", fn.dispatch.Function)
+				h.Error(*fn.dispatch)
+				return
 			}
 		}
 	}(h)
 }
 
-// TODO: these should be Dispatch receiver methods
-func (h Handler) Render(fn FnComponent) {
+func (h handler) Render(fn FnComponent) {
+	// If there is no HTML to render, cancel dispatch
+	if len(fn.dispatch.buf) == 0 && fn.dispatch.FnRender.HTML == "" {
+		return
+	}
 	var data Writer
 	fn.Render(context.Background(), &data)
-	fn.dispatch.FnRender.HTML = SanitizeHTML(string(data.buf))
+	fn.dispatch.FnRender.HTML = sanitizeHTML(string(data.buf))
 	h.MarshalAndPublish(*fn.dispatch)
 }
 
-func (h Handler) Redirect(fn FnComponent) {
-	fmt.Println(fn)
+func (h handler) Redirect(fn FnComponent) {
+	// If there is no URL to redirect to, cancel dispatch
+	if fn.dispatch.FnRedirect.URL == "" {
+		return
+	}
 	h.MarshalAndPublish(*fn.dispatch)
 }
 
-func (h Handler) Custom(fn FnComponent) {
+func (h handler) Custom(fn FnComponent) {
+	if fn.dispatch.FnCustom.Function == "" {
+		return
+	}
 	h.MarshalAndPublish(*fn.dispatch)
 }
 
-func (h Handler) MarshalAndPublish(d Dispatch) {
+func (h handler) MarshalAndPublish(d Dispatch) {
+	if d.conn == nil {
+		d.FnError.Message = "connection not found"
+		h.Error(d)
+		return
+	}
 	b, err := json.Marshal(d)
 	if err != nil {
-		log.Println(err)
 		d.FnError.Message = err.Error()
 		h.Error(d)
 		return
 	}
-	d.Conn.Publish(b)
+	d.conn.Publish(b)
 }
 
-func (h Handler) Event(d Dispatch) {
-	listener, ok := evtListeners.Get(d.FnEvent.ID)
+func (h handler) Event(d Dispatch) {
+	if d.conn == nil {
+		d.FnError.Message = "connection not found"
+		h.Error(d)
+		return
+	}
+	listener, ok := evtListeners.Get(d.FnEvent.ID, d.conn)
 	if !ok {
-		d.FnError.Message = fmt.Sprintf("error: event listener with id '%s' not found", d.FnEvent.ID)
+		d.FnError.Message = fmt.Sprintf("event listener with id '%s' not found", d.FnEvent.ID)
 		h.Error(d)
 		return
 	}
 	listener.Data = d.FnEvent.Data
-	ctx := ContextWithRequest{
-		Context: context.WithValue(context.Background(), EventKey, listener),
-		Request: nil,
-		dispatchDetails: dispatchDetails{
-			ConnID:    d.ConnID,
-			Conn:      d.Conn,
-			HandlerID: h.id,
-		},
-	}
+
+	ctx := context.WithValue(listener.Context, EventKey, listener)
 	response := listener.Handler(ctx)
-	response.dispatch.Conn = d.Conn
+	response.dispatch.conn = d.conn
 	response.dispatch.HandlerID = d.HandlerID
 	h.out <- response
 }
 
-func (h Handler) Error(d Dispatch) {
-	log.Println(d.FnError)
+func (h handler) Error(d Dispatch) {
+	if config.Silent {
+		return
+	}
+	config.Logger.Error(d.FnError)
 }
 
 type Writer struct {
@@ -164,59 +179,35 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func MiddleWareDispatch(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-
-		// Get route and pass to handler with information
-		next(w, r)
-	}
-}
-
 func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
-	//FIXME: This should be stored more gracefully
-	// newConns := make(map[string]context.Context)
-	handler := NewHandler()
+	handler := newHandler()
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		//TODO: keep cookies for session management
-
-		// srvAddr := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
-
-		// get id url param:
 		id := r.URL.Query().Get("fncmp_id")
 		if id == "" {
 			writer := Writer{ResponseWriter: w}
 			h(&writer, r)
-			// hf(r.Context()).Render(r.Context(), &writer)
-
-			//TODO: inject local storage script to store id for websocket
-
 			w.Write(writer.buf)
 		} else {
-			newConnection, err := NewConn(w, r, handler.id, id)
+			newConnection, err := newConn(w, r, handler.id, id)
 			if err != nil {
-				log.Println("error: failed to create new connection")
-				log.Println(err)
+				config.Logger.Error("failed to create new connection")
+				config.Logger.Error(err)
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("error: failed to create new connection"))
 				return
 			}
 			newConnection.HandlerID = handler.id
-			//TODO: write cookie
 
-			//TODO: get connection id from cookie and pass previous context
-			ctxWithRequest := &ContextWithRequest{
-				Context: r.Context(),
-				Request: r,
-				dispatchDetails: dispatchDetails{
-					ConnID:    id,
-					Conn:      newConnection,
-					HandlerID: handler.id,
-				},
-			}
+			ctx := context.WithValue(r.Context(), dispatchKey, dispatchDetails{
+				ConnID:    id,
+				Conn:      newConnection,
+				HandlerID: handler.id,
+			})
+			ctx = context.WithValue(ctx, RequestKey, r)
 
-			fn := hf(ctxWithRequest)
-			fn.dispatch.Conn = newConnection
+			fn := hf(ctx)
+			fn.dispatch.conn = newConnection
 			fn.dispatch.ConnID = id
 			fn.dispatch.HandlerID = handler.id
 			handler.out <- fn

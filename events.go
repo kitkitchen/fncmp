@@ -1,6 +1,7 @@
-package fncmp
+package main
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 
@@ -9,7 +10,7 @@ import (
 
 type OnEvent string
 
-// Event types
+// DOM event types
 const (
 	OnAbort              OnEvent = "abort"
 	OnAnimationEnd       OnEvent = "animationend"
@@ -95,67 +96,63 @@ const (
 )
 
 type EventListener struct {
-	ID       string   `json:"id"`
-	TargetID string   `json:"target_id"`
-	Handler  HandleFn `json:"-"`
-	On       OnEvent  `json:"on"`
-	Action   string   `json:"action"`
-	Method   string   `json:"method"`
-	Data     any      `json:"data"`
+	context.Context `json:"-"`
+	ID              string   `json:"id"`
+	TargetID        string   `json:"target_id"`
+	Handler         HandleFn `json:"-"`
+	On              OnEvent  `json:"on"`
+	Data            any      `json:"data"`
 }
 
-// TODO update this to regular dispatch func
-// Creates a new EventListener with OnEvent for component with ID that triggers function f
-func NewEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
+func newEventListener(on OnEvent, f FnComponent, h HandleFn) EventListener {
+	if f.dispatch.conn == nil {
+		config.Logger.Error("connection not found")
+	}
 	id := uuid.New().String()
 	el := EventListener{
+		Context:  f.Context,
+		ID:       id,
 		TargetID: f.id,
 		Handler:  h,
-		ID:       id,
 		On:       on,
 	}
-
-	evtListeners.Add(id, el)
+	evtListeners.Add(f.dispatch.conn, el)
 	return el
 }
 
 // Store and retrieve event listeners
-
 type eventListeners struct {
 	mu sync.Mutex
-	eh map[string]EventListener
+	el map[string]map[string]EventListener
 }
 
 var evtListeners = eventListeners{
-	eh: make(map[string]EventListener),
+	el: make(map[string]map[string]EventListener),
 }
 
-func (e *eventListeners) Add(id string, el EventListener) {
+func (e *eventListeners) Add(conn *conn, el EventListener) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.eh[id] = el
+	if _, ok := e.el[conn.ID]; !ok {
+		e.el[conn.ID] = make(map[string]EventListener)
+	}
+	e.el[conn.ID][el.ID] = el
 }
 
-func (e *eventListeners) Remove(id string) {
+func (e *eventListeners) Delete(conn *conn) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	delete(e.eh, id)
+	delete(e.el, conn.ID)
 }
 
-func (e *eventListeners) Get(id string) (EventListener, bool) {
+func (e *eventListeners) Get(id string, conn *conn) (EventListener, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	event, ok := e.eh[id]
+	event, ok := e.el[conn.ID][id]
 	return event, ok
 }
 
-func (e *eventListeners) Every() (el []EventListener) {
-	for _, e := range e.eh {
-		el = append(el, e)
-	}
-	return
-}
-
+// UnmarshalEventData unmarshals event listener data T from the client
 func UnmarshalEventData[T any](e EventListener) (T, error) {
 	var t T
 	b, err := json.Marshal(e.Data)
@@ -167,6 +164,21 @@ func UnmarshalEventData[T any](e EventListener) (T, error) {
 }
 
 // Event data types
+type EventTarget struct {
+	ID         string   `json:"id"`
+	ClassList  []string `json:"classList"`
+	TagName    string   `json:"tagName"`
+	InnerHTML  string   `json:"innerHTML"`
+	OuterHTML  string   `json:"outerHTML"`
+	Value      string   `json:"value"`
+	Checked    bool     `json:"checked"`
+	Disabled   bool     `json:"disabled"`
+	Hidden     bool     `json:"hidden"`
+	Style      string   `json:"style"`
+	Attributes []string `json:"attributes"`
+	Dataset    []string `json:"dataset"`
+}
+
 type PointerEvent struct {
 	IsTrusted        bool        `json:"isTrusted"`
 	AltKey           bool        `json:"altKey"`
@@ -289,21 +301,6 @@ type KeyboardEvent struct {
 	MetaKey          bool        `json:"metaKey"`
 	Repeat           bool        `json:"repeat"`
 	ShiftKey         bool        `json:"shiftKey"`
-}
-
-type EventTarget struct {
-	ID         string   `json:"id"`
-	ClassList  []string `json:"classList"`
-	TagName    string   `json:"tagName"`
-	InnerHTML  string   `json:"innerHTML"`
-	OuterHTML  string   `json:"outerHTML"`
-	Value      string   `json:"value"`
-	Checked    bool     `json:"checked"`
-	Disabled   bool     `json:"disabled"`
-	Hidden     bool     `json:"hidden"`
-	Style      string   `json:"style"`
-	Attributes []string `json:"attributes"`
-	Dataset    []string `json:"dataset"`
 }
 
 type FormDataEvent struct {
