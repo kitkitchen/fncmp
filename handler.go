@@ -143,7 +143,7 @@ func (h handler) MarshalAndPublish(d Dispatch) {
 
 func (h handler) Event(d Dispatch) {
 	if d.conn == nil {
-		d.FnError.Message = "connection not found"
+		d.FnError.Message = ErrConnectionNotFound.Error()
 		h.Error(d)
 		return
 	}
@@ -191,10 +191,10 @@ func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
 		} else {
 			newConnection, err := newConn(w, r, handler.id, id)
 			if err != nil {
-				config.Logger.Error("failed to create new connection")
+				config.Logger.Error(ErrConnectionFailed)
 				config.Logger.Error(err)
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("error: failed to create new connection"))
+				w.Write([]byte(ErrConnectionFailed))
 				return
 			}
 			newConnection.HandlerID = handler.id

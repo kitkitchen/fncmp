@@ -48,7 +48,11 @@ func NewFn(ctx context.Context, c Component) FnComponent {
 
 // Render renders the FnComponent with necessary metadata for the client
 func (f FnComponent) Render(ctx context.Context, w io.Writer) error {
-	w.Write([]byte(fmt.Sprint("<div id='" + f.id + "' label='" + f.dispatch.Label + "' events=" + f.dispatch.FnRender.listenerStrings() + ">")))
+	if f.dispatch.Label == "" {
+		w.Write([]byte(fmt.Sprint("<div id='" + f.id + "' events=" + f.dispatch.FnRender.listenerStrings() + ">")))
+	} else {
+		w.Write([]byte(fmt.Sprint("<div id='" + f.id + "' label='" + f.dispatch.Label + "' events=" + f.dispatch.FnRender.listenerStrings() + ">")))
+	}
 	HTML(f.dispatch.FnRender.HTML).Render(ctx, w)
 	w.Write(f.dispatch.buf)
 	w.Write([]byte("</div>"))
@@ -67,7 +71,7 @@ func (f FnComponent) WithContext(ctx context.Context) FnComponent {
 
 	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
 	if !ok {
-		config.Logger.Warn("context does not contain dispatch details")
+		config.Logger.Warn(ErrCtxMissingDispatch)
 		return f
 	}
 	f.dispatch.ConnID = dd.ConnID
@@ -212,12 +216,12 @@ func (f FnComponent) SwapElementInner(id string) FnComponent {
 // Dispatch immediately sends the FnComponent to the client
 func (f FnComponent) Dispatch() {
 	if f.dispatch.conn == nil {
-		log.Error("invalid dispatch", "conn", "nil")
+		log.Error(ErrConnectionNotFound)
 		return
 	}
 	h, ok := handlers.Get(f.dispatch.HandlerID)
 	if !ok {
-		log.Printf("error: handler '%s' not found", f.dispatch.HandlerID)
+		config.Logger.Error("handler not found", "HandlerID", f.dispatch.HandlerID)
 		return
 	}
 	h.out <- f
@@ -237,7 +241,7 @@ func JS(ctx context.Context, fn string, arg any) {
 func (f FnComponent) DispatchContext(ctx context.Context) {
 	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
 	if !ok {
-		config.Logger.Error("context does not contain dispatch details")
+		config.Logger.Error(ErrCtxMissingDispatch)
 	}
 	if dd.Conn == nil || dd.HandlerID == "" {
 		config.Logger.Error("invalid dispatch", "conn", dd.Conn, "handler", dd.HandlerID)
