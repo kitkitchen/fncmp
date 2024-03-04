@@ -33,10 +33,10 @@ type FnComponent struct {
 }
 
 // NewFn creates a new FnComponent from a Component
-func NewFn(c Component) FnComponent {
+func NewFn(ctx context.Context, c Component) FnComponent {
 	id := "fncmp-" + uuid.New().String()
 	f := FnComponent{
-		Context:  context.Background(),
+		Context:  ctx,
 		id:       id,
 		dispatch: newDispatch(id),
 	}.SwapTagInner(MainTag)
@@ -225,12 +225,12 @@ func (f FnComponent) Dispatch() {
 
 // RedirectURL redirects the client to the given url when returned from a handler
 func RedirectURL(ctx context.Context, url string) FnComponent {
-	return NewFn(nil).WithContext(ctx).WithRedirect(url)
+	return NewFn(ctx, nil).WithRedirect(url)
 }
 
 // JS runs a custom JavaScript function on the client
 func JS(ctx context.Context, fn string, arg any) {
-	NewFn(nil).JS(fn, arg).DispatchContext(ctx)
+	NewFn(ctx, nil).JS(fn, arg).Dispatch()
 }
 
 // DispatchContext immediately sends the FnComponent to the client
