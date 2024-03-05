@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
 )
 
@@ -35,10 +34,21 @@ type FnComponent struct {
 // NewFn creates a new FnComponent from a Component
 func NewFn(ctx context.Context, c Component) FnComponent {
 	id := "fncmp-" + uuid.New().String()
+
+	dispatch := newDispatch(id)
+	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
+	if !ok {
+		config.Logger.Warn(ErrCtxMissingDispatch)
+	} else {
+		dispatch.conn = dd.Conn
+		dispatch.ConnID = dd.ConnID
+		dispatch.HandlerID = dd.HandlerID
+	}
+
 	f := FnComponent{
 		Context:  ctx,
 		id:       id,
-		dispatch: newDispatch(id),
+		dispatch: dispatch,
 	}.SwapTagInner(MainTag)
 	if c != nil {
 		c.Render(f.Context, f)
@@ -216,7 +226,7 @@ func (f FnComponent) SwapElementInner(id string) FnComponent {
 // Dispatch immediately sends the FnComponent to the client
 func (f FnComponent) Dispatch() {
 	if f.dispatch.conn == nil {
-		log.Error(ErrConnectionNotFound)
+		config.Logger.Error(ErrConnectionNotFound)
 		return
 	}
 	h, ok := handlers.Get(f.dispatch.HandlerID)
@@ -235,19 +245,6 @@ func RedirectURL(ctx context.Context, url string) FnComponent {
 // JS runs a custom JavaScript function on the client
 func JS(ctx context.Context, fn string, arg any) {
 	NewFn(ctx, nil).JS(fn, arg).Dispatch()
-}
-
-// DispatchContext immediately sends the FnComponent to the client
-func (f FnComponent) DispatchContext(ctx context.Context) {
-	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
-	if !ok {
-		config.Logger.Error(ErrCtxMissingDispatch)
-	}
-	if dd.Conn == nil || dd.HandlerID == "" {
-		config.Logger.Error("invalid dispatch", "conn", dd.Conn, "handler", dd.HandlerID)
-		return
-	}
-	f.WithContext(ctx).Dispatch()
 }
 
 // HTML implements the Component interface for a string of HTML
