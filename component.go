@@ -1,11 +1,10 @@
-package main
+package fncmp
 
 import (
 	"context"
 	"fmt"
 	"io"
 
-	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
 )
 
@@ -33,12 +32,23 @@ type FnComponent struct {
 }
 
 // NewFn creates a new FnComponent from a Component
-func NewFn(c Component) FnComponent {
+func NewFn(ctx context.Context, c Component) FnComponent {
 	id := "fncmp-" + uuid.New().String()
+
+	dispatch := newDispatch(id)
+	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
+	if !ok {
+		config.Logger.Warn(ErrCtxMissingDispatch)
+	} else {
+		dispatch.conn = dd.Conn
+		dispatch.ConnID = dd.ConnID
+		dispatch.HandlerID = dd.HandlerID
+	}
+
 	f := FnComponent{
-		Context:  context.Background(),
+		Context:  ctx,
 		id:       id,
-		dispatch: newDispatch(id),
+		dispatch: dispatch,
 	}.SwapTagInner(MainTag)
 	if c != nil {
 		c.Render(f.Context, f)
@@ -48,7 +58,11 @@ func NewFn(c Component) FnComponent {
 
 // Render renders the FnComponent with necessary metadata for the client
 func (f FnComponent) Render(ctx context.Context, w io.Writer) error {
-	w.Write([]byte(fmt.Sprint("<div id='" + f.id + "' label='" + f.dispatch.Label + "' events=" + f.dispatch.FnRender.listenerStrings() + ">")))
+	if f.dispatch.Label == "" {
+		w.Write([]byte(fmt.Sprint("<div id='" + f.id + "' events=" + f.dispatch.FnRender.listenerStrings() + ">")))
+	} else {
+		w.Write([]byte(fmt.Sprint("<div id='" + f.id + "' label='" + f.dispatch.Label + "' events=" + f.dispatch.FnRender.listenerStrings() + ">")))
+	}
 	HTML(f.dispatch.FnRender.HTML).Render(ctx, w)
 	w.Write(f.dispatch.buf)
 	w.Write([]byte("</div>"))
@@ -67,7 +81,7 @@ func (f FnComponent) WithContext(ctx context.Context) FnComponent {
 
 	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
 	if !ok {
-		config.Logger.Warn("context does not contain dispatch details")
+		config.Logger.Warn(ErrCtxMissingDispatch)
 		return f
 	}
 	f.dispatch.ConnID = dd.ConnID
@@ -212,12 +226,12 @@ func (f FnComponent) SwapElementInner(id string) FnComponent {
 // Dispatch immediately sends the FnComponent to the client
 func (f FnComponent) Dispatch() {
 	if f.dispatch.conn == nil {
-		log.Error("invalid dispatch", "conn", "nil")
+		config.Logger.Error(ErrConnectionNotFound)
 		return
 	}
 	h, ok := handlers.Get(f.dispatch.HandlerID)
 	if !ok {
-		log.Printf("error: handler '%s' not found", f.dispatch.HandlerID)
+		config.Logger.Error("handler not found", "HandlerID", f.dispatch.HandlerID)
 		return
 	}
 	h.out <- f
@@ -225,25 +239,12 @@ func (f FnComponent) Dispatch() {
 
 // RedirectURL redirects the client to the given url when returned from a handler
 func RedirectURL(ctx context.Context, url string) FnComponent {
-	return NewFn(nil).WithContext(ctx).WithRedirect(url)
+	return NewFn(ctx, nil).WithRedirect(url)
 }
 
 // JS runs a custom JavaScript function on the client
 func JS(ctx context.Context, fn string, arg any) {
-	NewFn(nil).JS(fn, arg).DispatchContext(ctx)
-}
-
-// DispatchContext immediately sends the FnComponent to the client
-func (f FnComponent) DispatchContext(ctx context.Context) {
-	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
-	if !ok {
-		config.Logger.Error("context does not contain dispatch details")
-	}
-	if dd.Conn == nil || dd.HandlerID == "" {
-		config.Logger.Error("invalid dispatch", "conn", dd.Conn, "handler", dd.HandlerID)
-		return
-	}
-	f.WithContext(ctx).Dispatch()
+	NewFn(ctx, nil).JS(fn, arg).Dispatch()
 }
 
 // HTML implements the Component interface for a string of HTML

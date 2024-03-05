@@ -1,4 +1,4 @@
-package main
+package fncmp
 
 // ContextKey is used to store values in context esp. for event listeners
 type ContextKey string
