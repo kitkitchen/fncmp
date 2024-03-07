@@ -254,3 +254,8 @@ func (h HTML) Render(ctx context.Context, w io.Writer) error {
 	_, err := w.Write([]byte(h))
 	return err
 }
+
+func (h *HTML) Write(p []byte) (n int, err error) {
+	*h = HTML(string(*h) + string(p))
+	return len(p), nil
+}
