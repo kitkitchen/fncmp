@@ -152,7 +152,7 @@ func (e *eventListeners) Get(id string, conn *conn) (EventListener, bool) {
 	return event, ok
 }
 
-// UnmarshalEventData unmarshals event listener data T from the client
+// EventData unmarshals event listener data T from the client
 func EventData[T any](ctx context.Context) (T, error) {
 	e, ok := ctx.Value(EventKey).(EventListener)
 	if !ok {
