@@ -11,4 +11,5 @@ const (
 	ErrNoClientConnection DispatchError = "no connection to client"
 	ErrConnectionNotFound DispatchError = "connection not found"
 	ErrConnectionFailed   DispatchError = "connection failed"
+	ErrCtxMissingEvent    DispatchError = "context missing event details"
 )

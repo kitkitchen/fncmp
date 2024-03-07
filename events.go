@@ -153,7 +153,11 @@ func (e *eventListeners) Get(id string, conn *conn) (EventListener, bool) {
 }
 
 // UnmarshalEventData unmarshals event listener data T from the client
-func UnmarshalEventData[T any](e EventListener) (T, error) {
+func EventData[T any](ctx context.Context) (T, error) {
+	e, ok := ctx.Value(EventKey).(EventListener)
+	if !ok {
+		return *new(T), ErrCtxMissingEvent
+	}
 	var t T
 	b, err := json.Marshal(e.Data)
 	if err != nil {
