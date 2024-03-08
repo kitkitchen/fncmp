@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 type DispatchError string
 
@@ -7,9 +7,21 @@ func (e DispatchError) Error() string {
 }
 
 const (
-	ErrCtxMissingDispatch DispatchError = "context missing dispatch details"
+	ErrCtxMissingDispatch DispatchError = "context missing dispatch"
 	ErrNoClientConnection DispatchError = "no connection to client"
 	ErrConnectionNotFound DispatchError = "connection not found"
 	ErrConnectionFailed   DispatchError = "connection failed"
-	ErrCtxMissingEvent    DispatchError = "context missing event details"
+	ErrCtxMissingEvent    DispatchError = "context missing event"
+)
+
+type CacheError string
+
+func (e CacheError) Error() string {
+	return string(e)
+}
+
+const (
+	ErrCacheNotFound  CacheError = "cache not found"
+	ErrStoreNotFound  CacheError = "cache store not found"
+	ErrCacheWrongType CacheError = "cache wrong type"
 )
