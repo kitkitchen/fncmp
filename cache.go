@@ -96,11 +96,7 @@ type Cache[T any] struct {
 func (c *Cache[T]) Set(data T) error {
 	c.data = data
 	_, err := getCache[T](c.storeKey, c.cacheKey)
-	if errors.Is(err, ErrCacheNotFound) {
-		setCache(c.storeKey, c.cacheKey, data)
-		return nil
-	}
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrCacheNotFound) {
 		return err
 	}
 	setCache(c.storeKey, c.cacheKey, &data)
