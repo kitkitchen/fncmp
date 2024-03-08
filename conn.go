@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"encoding/json"
@@ -49,11 +49,7 @@ type (
 func newConn(w http.ResponseWriter, r *http.Request, handlerID string, ID string) (*conn, error) {
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
-			// TODO: check cookie for session id
-			// Set as conn id
 			return true
-			// host := strings.Split(r.Host, ":")[0]
-			// return host == "localhost"
 		},
 	}
 	websocket, err := upgrader.Upgrade(w, r, nil)
@@ -84,7 +80,6 @@ func (c *conn) close() error {
 func (c *conn) listen() {
 	go func(c *conn) {
 		defer c.close()
-		// Listen for messages on conn's Messages channel
 		var dispatch Dispatch
 		for {
 			_, message, err := c.websocket.ReadMessage()
