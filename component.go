@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"context"
@@ -81,7 +81,7 @@ func (f FnComponent) WithContext(ctx context.Context) FnComponent {
 
 	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
 	if !ok {
-		config.Logger.Warn(ErrCtxMissingDispatch)
+		config.Logger.Error(ErrCtxMissingDispatch)
 		return f
 	}
 	f.dispatch.ConnID = dd.ConnID
