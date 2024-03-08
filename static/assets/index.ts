@@ -42,7 +42,7 @@ type FnError = {
 };
 
 type Dispatch = {
-    function: "initialize" | "render" | "redirect" | "event" | "error" | "custom";
+    function: "render" | "class" | "redirect" | "event" | "error" | "custom";
     id: string;
     key: string;
     conn_id: string;
@@ -117,18 +117,12 @@ class API {
             this.ws = ws;
         }
         switch (d.function) {
-            case "initialize":
-                this.Dispatch(this.funs.initialize(d));
-                return;
             case "redirect":
                 window.location.href = d.redirect.url;
-                return;
-            case "custom":
-                this.Dispatch(window[d.custom.function](d.custom.data));
-                return;
-            case "render":
-                this.Dispatch(this.funs.render(d));
+                break;
             default:
+                const result = this.funs[d.function](d);
+                this.Dispatch(result);
                 break;
         }
     }
@@ -142,10 +136,6 @@ class API {
     };
 
     private funs: DispatchFunctions = {
-        initialize: (d: Dispatch) => {
-            d = this.utils.parseEventListeners(document.body, d);
-            this.Dispatch(this.utils.addEventListeners(d));
-        },
         render: (d: Dispatch) => {
             let elem: Element | null = null;
             const parsed = new DOMParser().parseFromString(
@@ -190,6 +180,13 @@ class API {
 
             d = this.utils.parseEventListeners(elem, d);
             this.Dispatch(this.utils.addEventListeners(d));
+            return;
+        },
+        class: (d: Dispatch) => {
+            return;
+        },
+        custom: (d: Dispatch) => {
+            const result = window[d.custom.function](d.custom.data)
             return;
         },
     };

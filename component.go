@@ -237,6 +237,11 @@ func (f FnComponent) Dispatch() {
 	h.out <- f
 }
 
+// ErrorFn returns a FnComponent with an error message
+func FnErr(ctx context.Context, err error) FnComponent {
+	return NewFn(ctx, nil).WithError(err)
+}
+
 // RedirectURL redirects the client to the given url when returned from a handler
 func RedirectURL(ctx context.Context, url string) FnComponent {
 	return NewFn(ctx, nil).WithRedirect(url)

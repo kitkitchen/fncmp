@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import "encoding/json"
 
@@ -6,6 +6,7 @@ type functionName string
 
 const (
 	render   functionName = "render"
+	class    functionName = "class"
 	redirect functionName = "redirect"
 	event    functionName = "event"
 	custom   functionName = "custom"
