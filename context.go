@@ -1,4 +1,6 @@
-package fncmp
+package main
+
+import "context"
 
 // ContextKey is used to store values in context esp. for event listeners
 type ContextKey string
@@ -18,4 +20,9 @@ type dispatchDetails struct {
 	ConnID    string
 	Conn      *conn
 	HandlerID string
+}
+
+func dispatchFromContext(ctx context.Context) (dispatchDetails, bool) {
+	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
+	return dd, ok
 }
