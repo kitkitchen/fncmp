@@ -45,7 +45,6 @@ type handler struct {
 	id        string
 	in        chan Dispatch
 	out       chan FnComponent
-	custom    map[string]chan Dispatch
 	handlesFn map[string]HandleFn
 }
 
@@ -54,7 +53,6 @@ func newHandler() *handler {
 		id:        uuid.New().String(),
 		in:        make(chan Dispatch, 1028),
 		out:       make(chan FnComponent, 1028),
-		custom:    make(map[string]chan Dispatch, 1028),
 		handlesFn: make(map[string]HandleFn),
 	}
 	handlers.Set(handler.id, handler)
@@ -134,24 +132,14 @@ func (h handler) Redirect(fn FnComponent) {
 }
 
 func (h handler) CustomIn(d Dispatch) {
-	go func() {
-		ch, ok := h.custom[d.ID]
-		if !ok {
-			d.FnError.Message = fmt.Sprintf("custom channel with id '%s' not found", d.HandlerID)
-			h.Error(d)
-			return
-		}
-		ch <- d
-	}()
+	config.Logger.Debug("custom function in", d.FnCustom.Function+" result", d.FnCustom.Result)
 }
 
-func (h handler) CustomOut(fn FnComponent) (result chan Dispatch) {
+func (h handler) CustomOut(fn FnComponent) {
 	if fn.dispatch.FnCustom.Function == "" {
-		return nil
+		return
 	}
-	defer h.MarshalAndPublish(*fn.dispatch)
-	h.custom[fn.dispatch.ID] = make(chan Dispatch, 2)
-	return h.custom[fn.dispatch.ID]
+	h.MarshalAndPublish(*fn.dispatch)
 }
 
 func (h handler) MarshalAndPublish(d Dispatch) {

@@ -248,20 +248,8 @@ func RedirectURL(ctx context.Context, url string) FnComponent {
 }
 
 // JS runs a custom JavaScript function on the client
-func JS(ctx context.Context, fn string, arg any) any {
-	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
-	if !ok {
-		config.Logger.Error(ErrCtxMissingDispatch)
-		return nil
-	}
-	handler, ok := handlers.Get(dd.HandlerID)
-	if !ok {
-		config.Logger.Error("handler not found", "HandlerID", dd.HandlerID)
-		return nil
-	}
-	chanD := handler.CustomOut(NewFn(ctx, nil).JS(fn, arg))
-	d := <-chanD
-	return d.FnCustom.Result
+func JS(ctx context.Context, fn string, arg any) {
+	NewFn(ctx, nil).JS(fn, arg).Dispatch()
 }
 
 // AddClasses adds classes to an element by ID in the DOM
