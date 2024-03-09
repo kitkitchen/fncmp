@@ -7,9 +7,6 @@ class Socket {
         this.ws = null;
         this.addr = undefined;
         this.key = undefined;
-        if (this.addr) {
-            throw new Error("ws: already connected to server...");
-        }
         let key = localStorage.getItem("fncmp_key");
         if (!key) {
             key = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
@@ -26,7 +23,7 @@ class Socket {
         }
         path_parsed = path.join("");
         if (path_parsed == "") {
-            path_parsed = "/main";
+            path_parsed = "/";
         }
         this.addr = "ws://" + window.location.host + path_parsed + "?fncmp_id=" + this.key;
         this.connect();
@@ -38,11 +35,9 @@ class Socket {
         catch (_a) {
             throw new Error("ws: failed to connect to server...");
         }
-        this.ws.onopen = function () {
-            document.getElementById('fncmp_script').remove();
-        };
+        this.ws.onopen = function () { };
         this.ws.onclose = function () { };
-        this.ws.onerror = function (e) { };
+        this.ws.onerror = function () { };
         this.ws.onmessage = function (event) {
             let d = JSON.parse(event.data);
             api.Process(this, d);
@@ -61,10 +56,6 @@ class API {
             this.ws.send(JSON.stringify(data));
         };
         this.funs = {
-            initialize: (d) => {
-                d = this.utils.parseEventListeners(document.body, d);
-                this.Dispatch(this.utils.addEventListeners(d));
-            },
             render: (d) => {
                 let elem = null;
                 const parsed = new DOMParser().parseFromString(d.render.html, "text/html").firstChild;
@@ -101,6 +92,13 @@ class API {
                 this.Dispatch(this.utils.addEventListeners(d));
                 return;
             },
+            class: (d) => {
+                return;
+            },
+            custom: (d) => {
+                const result = window[d.custom.function](d.custom.data);
+                return;
+            },
         };
         this.utils = {
             parseEventListeners: (element, d) => {
@@ -122,16 +120,6 @@ class API {
                 const formData = new FormData(form);
                 d.event.data = Object.fromEntries(formData.entries());
                 return d;
-            },
-            getElementByAttribute: (attribute) => document.querySelectorAll(`[${attribute}]`),
-            trackTouch: (elem) => {
-                elem.addEventListener("touchstart", (ev) => {
-                    ev.preventDefault();
-                    elem.classList.add("touch");
-                });
-                elem.addEventListener("touchend", (ev) => {
-                    elem.classList.remove("touch");
-                });
             },
             getAttributes: (elem, attribute) => {
                 const elems = elem.querySelectorAll(`[${attribute}]`);
@@ -195,18 +183,12 @@ class API {
             this.ws = ws;
         }
         switch (d.function) {
-            case "initialize":
-                this.Dispatch(this.funs.initialize(d));
-                return;
             case "redirect":
                 window.location.href = d.redirect.url;
-                return;
-            case "custom":
-                this.Dispatch(window[d.custom.function](d.custom.data));
-                return;
-            case "render":
-                this.Dispatch(this.funs.render(d));
+                break;
             default:
+                const result = this.funs[d.function](d);
+                this.Dispatch(result);
                 break;
         }
     }
