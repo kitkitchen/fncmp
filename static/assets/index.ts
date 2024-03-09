@@ -10,6 +10,7 @@ type DispatchFunctions = {
 type FnCustom = {
     function: string;
     data: Object;
+    result: Object;
 };
 
 type FnEventListener = {
@@ -33,6 +34,12 @@ type FnRender = {
     event_listeners: FnEventListener[];
 };
 
+type FnClass = {
+    target_id: string;
+    remove: boolean;
+    names: string[];
+};
+
 type FnRedirect = {
     url: string;
 };
@@ -51,6 +58,7 @@ type Dispatch = {
     label: string;
     event: FnEventListener;
     render: FnRender;
+    class: FnClass;
     redirect: FnRedirect;
     custom: FnCustom;
     error: FnError;
@@ -121,6 +129,10 @@ class API {
                 window.location.href = d.redirect.url;
                 break;
             default:
+                if(!this.funs[d.function]) {
+                    this.Error(d, "function not found: " + d.function);
+                    break;
+                }
                 const result = this.funs[d.function](d);
                 this.Dispatch(result);
                 break;
@@ -183,11 +195,20 @@ class API {
             return;
         },
         class: (d: Dispatch) => {
+            const elem = document.getElementById(d.class.target_id);
+            if (!elem) {
+                return this.Error(d, "element not found");
+            }
+            if (d.class.remove) {
+                elem.classList.remove(...d.class.names);
+            } else {
+                elem.classList.add(...d.class.names);
+            }
             return;
         },
         custom: (d: Dispatch) => {
-            const result = window[d.custom.function](d.custom.data)
-            return;
+            d.custom.result = window[d.custom.function](d.custom.data)
+            return d;
         },
     };
 

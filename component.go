@@ -248,8 +248,39 @@ func RedirectURL(ctx context.Context, url string) FnComponent {
 }
 
 // JS runs a custom JavaScript function on the client
-func JS(ctx context.Context, fn string, arg any) {
-	NewFn(ctx, nil).JS(fn, arg).Dispatch()
+func JS(ctx context.Context, fn string, arg any) any {
+	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
+	if !ok {
+		config.Logger.Error(ErrCtxMissingDispatch)
+		return nil
+	}
+	handler, ok := handlers.Get(dd.HandlerID)
+	if !ok {
+		config.Logger.Error("handler not found", "HandlerID", dd.HandlerID)
+		return nil
+	}
+	chanD := handler.CustomOut(NewFn(ctx, nil).JS(fn, arg))
+	d := <-chanD
+	return d.FnCustom.Result
+}
+
+// AddClasses adds classes to an element by ID in the DOM
+func AddClasses(ctx context.Context, id string, classes ...string) {
+	fn := NewFn(ctx, nil)
+	fn.dispatch.Function = class
+	fn.dispatch.FnClass.TargetID = id
+	fn.dispatch.FnClass.Names = classes
+	fn.Dispatch()
+}
+
+// RemoveClasses removes classes from an element by ID in the DOM
+func RemoveClasses(ctx context.Context, id string, classes ...string) {
+	fn := NewFn(ctx, nil)
+	fn.dispatch.Function = class
+	fn.dispatch.FnClass.TargetID = id
+	fn.dispatch.FnClass.Remove = true
+	fn.dispatch.FnClass.Names = classes
+	fn.Dispatch()
 }
 
 // HTML implements the Component interface for a string of HTML

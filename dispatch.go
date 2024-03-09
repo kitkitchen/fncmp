@@ -33,12 +33,18 @@ type (
 		HTML           string          `json:"html"`
 		EventListeners []EventListener `json:"event_listeners"`
 	}
+	FnClass struct {
+		TargetID string   `json:"target_id"`
+		Remove   bool     `json:"remove"`
+		Names    []string `json:"names"`
+	}
 	FnRedirect struct {
 		URL string `json:"url"`
 	}
 	FnCustom struct {
 		Function string `json:"function"`
 		Data     any    `json:"data"`
+		Result   any    `json:"result"`
 	}
 	FnError struct {
 		Message string `json:"message"`
@@ -66,6 +72,7 @@ type Dispatch struct {
 	Function   functionName  `json:"function"`
 	FnEvent    EventListener `json:"event"`
 	FnRender   FnRender      `json:"render"`
+	FnClass    FnClass       `json:"class"`
 	FnRedirect FnRedirect    `json:"redirect"`
 	FnCustom   FnCustom      `json:"custom"`
 	FnError    FnError       `json:"error"`

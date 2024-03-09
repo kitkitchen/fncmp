@@ -45,6 +45,7 @@ type handler struct {
 	id        string
 	in        chan Dispatch
 	out       chan FnComponent
+	custom    map[string]chan Dispatch
 	handlesFn map[string]HandleFn
 }
 
@@ -53,6 +54,7 @@ func newHandler() *handler {
 		id:        uuid.New().String(),
 		in:        make(chan Dispatch, 1028),
 		out:       make(chan FnComponent, 1028),
+		custom:    make(map[string]chan Dispatch, 1028),
 		handlesFn: make(map[string]HandleFn),
 	}
 	handlers.Set(handler.id, handler)
@@ -69,6 +71,8 @@ func (h *handler) listen() {
 			switch d.Function {
 			case event:
 				h.Event(d)
+			case custom:
+				h.CustomIn(d)
 			case _error:
 				h.Error(d)
 			default:
@@ -84,10 +88,12 @@ func (h *handler) listen() {
 			switch fn.dispatch.Function {
 			case render:
 				h.Render(fn)
+			case class:
+				h.Class(fn)
 			case redirect:
 				h.Redirect(fn)
 			case custom:
-				h.Custom(fn)
+				h.CustomOut(fn)
 			case _error:
 				h.Error(*fn.dispatch)
 			default:
@@ -111,6 +117,14 @@ func (h handler) Render(fn FnComponent) {
 	h.MarshalAndPublish(*fn.dispatch)
 }
 
+func (h handler) Class(fn FnComponent) {
+	// If there is no class to add, cancel dispatch
+	if len(fn.dispatch.FnClass.Names) == 0 {
+		return
+	}
+	h.MarshalAndPublish(*fn.dispatch)
+}
+
 func (h handler) Redirect(fn FnComponent) {
 	// If there is no URL to redirect to, cancel dispatch
 	if fn.dispatch.FnRedirect.URL == "" {
@@ -119,11 +133,25 @@ func (h handler) Redirect(fn FnComponent) {
 	h.MarshalAndPublish(*fn.dispatch)
 }
 
-func (h handler) Custom(fn FnComponent) {
+func (h handler) CustomIn(d Dispatch) {
+	go func() {
+		ch, ok := h.custom[d.ID]
+		if !ok {
+			d.FnError.Message = fmt.Sprintf("custom channel with id '%s' not found", d.HandlerID)
+			h.Error(d)
+			return
+		}
+		ch <- d
+	}()
+}
+
+func (h handler) CustomOut(fn FnComponent) (result chan Dispatch) {
 	if fn.dispatch.FnCustom.Function == "" {
-		return
+		return nil
 	}
-	h.MarshalAndPublish(*fn.dispatch)
+	defer h.MarshalAndPublish(*fn.dispatch)
+	h.custom[fn.dispatch.ID] = make(chan Dispatch, 2)
+	return h.custom[fn.dispatch.ID]
 }
 
 func (h handler) MarshalAndPublish(d Dispatch) {

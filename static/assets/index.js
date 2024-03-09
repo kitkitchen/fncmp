@@ -93,11 +93,21 @@ class API {
                 return;
             },
             class: (d) => {
+                const elem = document.getElementById(d.class.target_id);
+                if (!elem) {
+                    return this.Error(d, "element not found");
+                }
+                if (d.class.remove) {
+                    elem.classList.remove(...d.class.names);
+                }
+                else {
+                    elem.classList.add(...d.class.names);
+                }
                 return;
             },
             custom: (d) => {
-                const result = window[d.custom.function](d.custom.data);
-                return;
+                d.custom.result = window[d.custom.function](d.custom.data);
+                return d;
             },
         };
         this.utils = {
@@ -187,6 +197,10 @@ class API {
                 window.location.href = d.redirect.url;
                 break;
             default:
+                if (!this.funs[d.function]) {
+                    this.Error(d, "function not found: " + d.function);
+                    break;
+                }
                 const result = this.funs[d.function](d);
                 this.Dispatch(result);
                 break;
