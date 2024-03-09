@@ -121,6 +121,9 @@ func (c *conn) listen() {
 			c.close()
 			break
 		}
+		if c.websocket == nil {
+			break
+		}
 
 		if err := c.websocket.WriteMessage(1, msg); err != nil {
 			config.Logger.Error("error writing message", "error", err)
