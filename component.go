@@ -237,7 +237,7 @@ func (f FnComponent) Dispatch() {
 	h.out <- f
 }
 
-// ErrorFn returns a FnComponent with an error message
+// FnErr returns a FnComponent with an error message
 func FnErr(ctx context.Context, err error) FnComponent {
 	return NewFn(ctx, nil).WithError(err)
 }

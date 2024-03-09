@@ -71,7 +71,7 @@ func (c *conn) close() error {
 	if c == nil {
 		return errors.New("cannot close nil connection")
 	}
-	sm.Delete(c.ID)
+	sm.delete(c.ID)
 	evtListeners.Delete(c)
 	connPool.Delete(c.ID)
 	c.websocket.Close()
