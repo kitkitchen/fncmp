@@ -163,7 +163,6 @@ class API {
 
     private funs: DispatchFunctions = {
         render: (d: Dispatch) => {
-            console.log(JSON.stringify(d.render))
             let elem: Element | null = null;
             const parsed = new DOMParser().parseFromString(
                 d.render.html,
@@ -205,7 +204,6 @@ class API {
                 elem.innerHTML = html + elem.innerHTML;
             }
             if (d.render.remove) {
-                console.log("remove"); 
                 elem.remove();
                 return;
             }
