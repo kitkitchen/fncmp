@@ -7,12 +7,6 @@ type DispatchFunctions = {
     [key: string]: (data: Dispatch) => Dispatch | void;
 };
 
-type FnCustom = {
-    function: string;
-    data: Object;
-    result: Object;
-};
-
 type FnEventListener = {
     id: string;
     target_id: string;
@@ -22,6 +16,11 @@ type FnEventListener = {
     form_data: string;
     data: Object;
 };
+
+type FnPing = {
+    server: boolean;
+    client: boolean;
+}
 
 type FnRender = {
     target_id: string;
@@ -40,6 +39,12 @@ type FnClass = {
     names: string[];
 };
 
+type FnCustom = {
+    function: string;
+    data: Object;
+    result: Object;
+};
+
 type FnRedirect = {
     url: string;
 };
@@ -49,7 +54,7 @@ type FnError = {
 };
 
 type Dispatch = {
-    function: "render" | "class" | "redirect" | "event" | "error" | "custom";
+    function: "ping" | "render" | "class" | "custom"| "redirect" | "event" | "error" ;
     id: string;
     key: string;
     conn_id: string;
@@ -57,6 +62,7 @@ type Dispatch = {
     action: string;
     label: string;
     event: FnEventListener;
+    ping: FnPing;
     render: FnRender;
     class: FnClass;
     redirect: FnRedirect;
@@ -110,6 +116,15 @@ class Socket {
 
         this.ws.onmessage = function (event) {
             let d = JSON.parse(event.data) as Dispatch;
+
+            console.log(d);
+            if (d.function == "ping") {
+                console.log("ping")
+                d.ping.client = true;
+                this.send(JSON.stringify(d));
+                return;
+            }
+
             api.Process(this, d);
         };
     }

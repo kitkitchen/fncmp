@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -42,6 +43,7 @@ type (
 		websocket *websocket.Conn
 		ID        string
 		HandlerID string
+		LastPing  time.Time
 		Messages  chan []byte
 	}
 )
@@ -137,6 +139,14 @@ func (c *conn) Publish(msg []byte) {
 	_, err := json.Marshal(msg)
 	if err != nil {
 		config.Logger.Error("error: message not json encodable", "error", err)
+		return
+	}
+	if c == nil {
+		config.Logger.Warn("connection severed, message not sent")
+		return
+	}
+	conn, _ := connPool.Get(c.ID)
+	if conn != c {
 		return
 	}
 	c.Messages <- msg

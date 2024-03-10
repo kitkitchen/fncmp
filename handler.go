@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -67,41 +68,57 @@ func (h *handler) listen() {
 	go func(h *handler) {
 		for d := range h.in {
 			switch d.Function {
+			case ping:
+				go h.Ping(d)
 			case event:
-				h.Event(d)
+				go h.Event(d)
 			case custom:
-				h.CustomIn(d)
+				go h.CustomIn(d)
 			case _error:
-				h.Error(d)
+				go h.Error(d)
 			default:
 				d.FnError.Message = fmt.Sprintf(
 					"function '%s' found, expected event or error on 'in' channel", d.Function)
-				h.Error(d)
-				return
+				go h.Error(d)
 			}
 		}
 	}(h)
 	go func(h *handler) {
 		for fn := range h.out {
 			switch fn.dispatch.Function {
+			case ping:
+				go h.Ping(*fn.dispatch)
 			case render:
-				h.Render(fn)
+				go h.Render(fn)
 			case class:
-				h.Class(fn)
+				go h.Class(fn)
 			case redirect:
-				h.Redirect(fn)
+				go h.Redirect(fn)
 			case custom:
-				h.CustomOut(fn)
+				go h.CustomOut(fn)
 			case _error:
-				h.Error(*fn.dispatch)
+				go h.Error(*fn.dispatch)
 			default:
 				fn.dispatch.FnError.Message = fmt.Sprintf(
 					"function '%s' found, expected event or error on 'in' channel", fn.dispatch.Function)
-				h.Error(*fn.dispatch)
-				return
+				go h.Error(*fn.dispatch)
 			}
 		}
 	}(h)
+}
+
+func (h handler) Ping(d Dispatch) {
+	if d.conn == nil {
+		d.FnError.Message = "connection not found"
+		h.Error(d)
+		return
+	}
+	// Send ping to client
+	if !d.FnPing.Client {
+		d.FnPing.Server = true
+		h.MarshalAndPublish(d)
+		return
+	}
 }
 
 func (h handler) Render(fn FnComponent) {
@@ -197,6 +214,7 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 
 func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
 	handler := newHandler()
+	handler.listen()
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Query().Get("fncmp_id")
@@ -222,12 +240,34 @@ func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
 			})
 			ctx = context.WithValue(ctx, RequestKey, r)
 
+			// Send initial fn to client
 			fn := hf(ctx)
 			fn.dispatch.conn = newConnection
 			fn.dispatch.ConnID = id
 			fn.dispatch.HandlerID = handler.id
 			handler.out <- fn
-			handler.listen()
+
+			pinger := newDispatch(id)
+			pinger.Function = ping
+			pinger.FnPing.Server = true
+			pinger.conn = newConnection
+			pinger.ConnID = id
+			pinger.HandlerID = handler.id
+
+			// Send ping to client
+			go func(d Dispatch) {
+				for {
+					// Check if connection is still open
+					conn, _ := connPool.Get(d.ConnID)
+					if conn != d.conn {
+						// Connection has been replaced
+						break
+					}
+					handler.Ping(d)
+					time.Sleep(10 * time.Second)
+				}
+			}(*pinger)
+
 			newConnection.listen()
 		}
 	}

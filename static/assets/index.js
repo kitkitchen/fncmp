@@ -40,6 +40,14 @@ class Socket {
         this.ws.onerror = function () { };
         this.ws.onmessage = function (event) {
             let d = JSON.parse(event.data);
+            console.log(d);
+            console.log("OK")
+            if (d.function == "ping") {
+                console.log("ping");
+                d.ping.client = true;
+                this.send(JSON.stringify(d));
+                return;
+            }
             api.Process(this, d);
         };
     }

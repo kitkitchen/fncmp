@@ -5,6 +5,7 @@ import "encoding/json"
 type functionName string
 
 const (
+	ping     functionName = "ping"
 	render   functionName = "render"
 	class    functionName = "class"
 	redirect functionName = "redirect"
@@ -32,6 +33,10 @@ type (
 		Prepend        bool            `json:"prepend"`
 		HTML           string          `json:"html"`
 		EventListeners []EventListener `json:"event_listeners"`
+	}
+	FnPing struct {
+		Server bool `json:"server"`
+		Client bool `json:"client"`
 	}
 	FnClass struct {
 		TargetID string   `json:"target_id"`
@@ -71,6 +76,7 @@ type Dispatch struct {
 	Label      string        `json:"label"`
 	Function   functionName  `json:"function"`
 	FnEvent    EventListener `json:"event"`
+	FnPing     FnPing        `json:"ping"`
 	FnRender   FnRender      `json:"render"`
 	FnClass    FnClass       `json:"class"`
 	FnRedirect FnRedirect    `json:"redirect"`
