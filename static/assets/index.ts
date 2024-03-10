@@ -29,6 +29,7 @@ type FnRender = {
     outer: boolean;
     append: boolean;
     prepend: boolean;
+    remove: boolean;
     html: string;
     event_listeners: FnEventListener[];
 };
@@ -162,6 +163,7 @@ class API {
 
     private funs: DispatchFunctions = {
         render: (d: Dispatch) => {
+            console.log(JSON.stringify(d.render))
             let elem: Element | null = null;
             const parsed = new DOMParser().parseFromString(
                 d.render.html,
@@ -202,9 +204,15 @@ class API {
             if (d.render.prepend) {
                 elem.innerHTML = html + elem.innerHTML;
             }
+            if (d.render.remove) {
+                console.log("remove"); 
+                elem.remove();
+                return;
+            }
 
             d = this.utils.parseEventListeners(elem, d);
             this.Dispatch(this.utils.addEventListeners(d));
+
             return;
         },
         class: (d: Dispatch) => {

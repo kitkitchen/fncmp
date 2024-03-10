@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"math"
@@ -27,7 +27,7 @@ var config = &Config{
 		ReportCaller:    true,
 		ReportTimestamp: true,
 		TimeFormat:      time.Kitchen,
-		Prefix:          "FnCmp: ",
+		Prefix:          "package fncmp:",
 	}),
 }
 
@@ -38,12 +38,21 @@ type Config struct {
 	Logger   *log.Logger
 }
 
+func SetConfig(c *Config) {
+	config = c
+	config.Set()
+}
+
 func (c *Config) Set() {
 	if c.Logger == nil {
 		c.Logger = config.Logger
 	}
 
 	config = c
+	if c.Silent || c.LogLevel == 0 {
+		config.Logger.SetLevel(log.Level(None))
+		return
+	}
 	c.Logger.Info("FnCmp config set")
 	config.Logger.SetLevel(log.Level(c.LogLevel))
 }

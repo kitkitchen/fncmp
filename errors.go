@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 type DispatchError string
 

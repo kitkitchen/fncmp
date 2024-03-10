@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"context"
@@ -123,7 +123,7 @@ func (h handler) Ping(d Dispatch) {
 
 func (h handler) Render(fn FnComponent) {
 	// If there is no HTML to render, cancel dispatch
-	if len(fn.dispatch.buf) == 0 && fn.dispatch.FnRender.HTML == "" {
+	if len(fn.dispatch.buf) == 0 && fn.dispatch.FnRender.HTML == "" && !fn.dispatch.FnRender.Remove {
 		return
 	}
 	var data Writer

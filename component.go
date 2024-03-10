@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"context"
@@ -38,7 +38,7 @@ func NewFn(ctx context.Context, c Component) FnComponent {
 	dispatch := newDispatch(id)
 	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
 	if !ok {
-		config.Logger.Warn(ErrCtxMissingDispatch)
+		config.Logger.Error(ErrCtxMissingDispatch)
 	} else {
 		dispatch.conn = dd.Conn
 		dispatch.ConnID = dd.ConnID
@@ -49,7 +49,7 @@ func NewFn(ctx context.Context, c Component) FnComponent {
 		Context:  ctx,
 		id:       id,
 		dispatch: dispatch,
-	}.SwapTagInner(MainTag)
+	}.SwapTagInner("main")
 	if c != nil {
 		c.Render(f.Context, f)
 	}
@@ -132,9 +132,9 @@ func (f FnComponent) WithLabel(label string) FnComponent {
 }
 
 // AppendTag appends the rendered component to a tag in the DOM
-func (f FnComponent) AppendTag(t Tag) FnComponent {
+func (f FnComponent) AppendTag(tag string) FnComponent {
 	f.dispatch.Function = render
-	f.dispatch.FnRender.Tag = t
+	f.dispatch.FnRender.Tag = tag
 	f.dispatch.FnRender.Append = true
 	f.dispatch.FnRender.Prepend = false
 	f.dispatch.FnRender.Inner = false
@@ -143,9 +143,9 @@ func (f FnComponent) AppendTag(t Tag) FnComponent {
 }
 
 // PrependTag prepends the rendered component to a tag in the DOM
-func (f FnComponent) PrependTag(t Tag) FnComponent {
+func (f FnComponent) PrependTag(tag string) FnComponent {
 	f.dispatch.Function = render
-	f.dispatch.FnRender.Tag = t
+	f.dispatch.FnRender.Tag = tag
 	f.dispatch.FnRender.Append = false
 	f.dispatch.FnRender.Prepend = true
 	f.dispatch.FnRender.Inner = false
@@ -154,9 +154,9 @@ func (f FnComponent) PrependTag(t Tag) FnComponent {
 }
 
 // SwapTagOuter swaps the rendered component with a tag in the DOM
-func (f FnComponent) SwapTagOuter(t Tag) FnComponent {
+func (f FnComponent) SwapTagOuter(tag string) FnComponent {
 	f.dispatch.Function = render
-	f.dispatch.FnRender.Tag = t
+	f.dispatch.FnRender.Tag = tag
 	f.dispatch.FnRender.Append = false
 	f.dispatch.FnRender.Prepend = false
 	f.dispatch.FnRender.Inner = false
@@ -165,9 +165,9 @@ func (f FnComponent) SwapTagOuter(t Tag) FnComponent {
 }
 
 // SwapTagInner swaps the inner HTML of a tag in the DOM with the rendered component
-func (f FnComponent) SwapTagInner(t Tag) FnComponent {
+func (f FnComponent) SwapTagInner(tag string) FnComponent {
 	f.dispatch.Function = render
-	f.dispatch.FnRender.Tag = t
+	f.dispatch.FnRender.Tag = tag
 	f.dispatch.FnRender.Append = false
 	f.dispatch.FnRender.Prepend = false
 	f.dispatch.FnRender.Inner = true
@@ -268,6 +268,30 @@ func RemoveClasses(ctx context.Context, id string, classes ...string) {
 	fn.dispatch.FnClass.TargetID = id
 	fn.dispatch.FnClass.Remove = true
 	fn.dispatch.FnClass.Names = classes
+	fn.Dispatch()
+}
+
+// Remove element by ID in the DOM
+func RemoveElement(ctx context.Context, id string) {
+	fn := NewFn(ctx, nil)
+	fn.dispatch.Function = render
+	fn.dispatch.FnRender.Remove = true
+	fn.dispatch.FnRender.Inner = false
+	fn.dispatch.FnRender.Outer = false
+	fn.dispatch.FnRender.Prepend = false
+	fn.dispatch.FnRender.TargetID = id
+	fn.Dispatch()
+}
+
+// Remove tag in the DOM
+func RemoveTag(ctx context.Context, tag string) {
+	fn := NewFn(ctx, nil)
+	fn.dispatch.Function = render
+	fn.dispatch.FnRender.Remove = true
+	fn.dispatch.FnRender.Inner = false
+	fn.dispatch.FnRender.Outer = false
+	fn.dispatch.FnRender.Prepend = false
+	fn.dispatch.FnRender.Tag = tag
 	fn.Dispatch()
 }
 
