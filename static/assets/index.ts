@@ -117,9 +117,7 @@ class Socket {
         this.ws.onmessage = function (event) {
             let d = JSON.parse(event.data) as Dispatch;
 
-            console.log(d);
             if (d.function == "ping") {
-                console.log("ping")
                 d.ping.client = true;
                 this.send(JSON.stringify(d));
                 return;
