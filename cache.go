@@ -4,24 +4,30 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 )
 
 type Cache[T any] struct {
-	storeKey interface{}
-	cacheKey interface{}
-	data     T
+	storeKey  interface{}
+	cacheKey  interface{}
+	createdAt time.Time
+	updatedAt time.Time
+	data      T
 }
 
+// Set sets the value of the cache
 func (c *Cache[T]) Set(data T) error {
 	c.data = data
 	_, err := getCache[T](c.storeKey, c.cacheKey)
 	if err != nil && !errors.Is(err, ErrCacheNotFound) {
 		return err
 	}
+	c.updatedAt = time.Now()
 	setCache(c.storeKey, c.cacheKey, &data)
 	return nil
 }
 
+// Value returns the current value of the cache
 func (c *Cache[T]) Value() T {
 	cache, err := getCache[T](c.storeKey, c.cacheKey)
 	if err != nil {
@@ -30,10 +36,24 @@ func (c *Cache[T]) Value() T {
 	return cache.data
 }
 
+// Delete removes the cache from the store
 func (c *Cache[T]) Delete() {
 	deleteCache(c.storeKey, c.cacheKey)
 }
 
+func (c *Cache[T]) CreatedAt() time.Time {
+	return c.createdAt
+}
+
+func (c *Cache[T]) UpdatedAt() time.Time {
+	return c.updatedAt
+}
+
+// UseCache returns a cache from the store.
+//
+// * It is important that the context passed to UseCache is that from a HandleFn
+//
+// https://pkg.go.dev/github.com/kitkitchen/fncmp#HandleFn
 func UseCache[T any](ctx context.Context, key interface{}) (Cache[T], error) {
 	dispatch, ok := dispatchFromContext(ctx)
 	if !ok {
@@ -87,9 +107,10 @@ func newCache[T any](storeKey any, cacheKey any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cache[cacheKey] = &Cache[any]{
-		storeKey: storeKey,
-		cacheKey: cacheKey,
-		data:     new(T),
+		storeKey:  storeKey,
+		cacheKey:  cacheKey,
+		createdAt: time.Now(),
+		data:      new(T),
 	}
 }
 

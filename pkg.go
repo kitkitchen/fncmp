@@ -53,6 +53,6 @@ func (c *Config) Set() {
 		config.Logger.SetLevel(log.Level(None))
 		return
 	}
-	c.Logger.Info("FnCmp config set")
+	c.Logger.Info("fncmp config set", "silent", c.Silent, "log_level", c.LogLevel)
 	config.Logger.SetLevel(log.Level(c.LogLevel))
 }
