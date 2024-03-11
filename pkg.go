@@ -19,17 +19,21 @@ const (
 	None  LogLevel = math.MaxInt32
 )
 
-var config = &Config{
-	DevMode:      false,
-	Silent:       false,
-	CacheTimeOut: 30 * time.Minute,
-	LogLevel:     Error,
-	Logger: log.NewWithOptions(os.Stderr, log.Options{
-		ReportCaller:    true,
-		ReportTimestamp: true,
-		TimeFormat:      time.Kitchen,
-		Prefix:          "package fncmp:",
-	}),
+var config *Config
+
+func init() {
+	config = &Config{
+		DevMode:      false,
+		Silent:       false,
+		CacheTimeOut: 30 * time.Minute,
+		LogLevel:     Error,
+		Logger: log.NewWithOptions(os.Stderr, log.Options{
+			ReportCaller:    true,
+			ReportTimestamp: true,
+			TimeFormat:      time.Kitchen,
+			Prefix:          "package fncmp:",
+		}),
+	}
 }
 
 type Config struct {
