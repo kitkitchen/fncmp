@@ -61,7 +61,8 @@ func (c *Config) Set() {
 		c.Logger.SetLevel(log.Level(None))
 		return
 	}
-	c.Logger.Info("fncmp config set",
+	c.Logger.Info(
+		"fncmp config set",
 		"cache_timeout", c.CacheTimeOut,
 		"log_level", c.LogLevel,
 	)

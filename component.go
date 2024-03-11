@@ -1,4 +1,4 @@
-package main
+package fncmp
 
 import (
 	"context"
@@ -16,8 +16,9 @@ type Component interface {
 // RenderComponent renders a component and returns the HTML string
 func RenderComponent(c ...Component) (html string) {
 	w := Writer{}
+	ctx := context.Background()
 	for _, v := range c {
-		v.Render(context.Background(), &w)
+		v.Render(ctx, &w)
 	}
 	html = string(w.buf)
 	return html
@@ -38,7 +39,7 @@ func NewFn(ctx context.Context, c Component) FnComponent {
 	dispatch := newDispatch(id)
 	dd, ok := ctx.Value(dispatchKey).(dispatchDetails)
 	if !ok {
-		config.Logger.Error(ErrCtxMissingDispatch)
+		config.Logger.Warn(ErrCtxMissingDispatch)
 	} else {
 		dispatch.conn = dd.Conn
 		dispatch.ConnID = dd.ConnID
