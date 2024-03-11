@@ -1,4 +1,4 @@
-package fncmp
+package main
 
 import (
 	"math"
@@ -21,18 +21,20 @@ const (
 
 var config *Config
 
+var configOpts = log.Options{
+	ReportCaller:    true,
+	ReportTimestamp: true,
+	TimeFormat:      time.Kitchen,
+	Prefix:          "package main:",
+}
+
 func init() {
 	config = &Config{
 		DevMode:      false,
 		Silent:       false,
 		CacheTimeOut: 30 * time.Minute,
 		LogLevel:     Error,
-		Logger: log.NewWithOptions(os.Stderr, log.Options{
-			ReportCaller:    true,
-			ReportTimestamp: true,
-			TimeFormat:      time.Kitchen,
-			Prefix:          "package fncmp:",
-		}),
+		Logger:       log.NewWithOptions(os.Stderr, configOpts),
 	}
 }
 
@@ -51,12 +53,12 @@ func SetConfig(c *Config) {
 
 func (c *Config) Set() {
 	if c.Logger == nil {
-		c.Logger = config.Logger
+		c.Logger = log.NewWithOptions(os.Stderr, configOpts)
 	}
 
 	config = c
 	if c.Silent || c.LogLevel == 0 {
-		config.Logger.SetLevel(log.Level(None))
+		c.Logger.SetLevel(log.Level(None))
 		return
 	}
 	c.Logger.Info("fncmp config set", "silent", c.Silent, "log_level", c.LogLevel)
