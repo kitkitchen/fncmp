@@ -20,9 +20,10 @@ const (
 )
 
 var config = &Config{
-	Silent:   false,
-	LogLevel: Error,
-	DevMode:  false,
+	DevMode:      false,
+	Silent:       false,
+	CacheTimeOut: 30 * time.Minute,
+	LogLevel:     Error,
 	Logger: log.NewWithOptions(os.Stderr, log.Options{
 		ReportCaller:    true,
 		ReportTimestamp: true,
@@ -32,10 +33,11 @@ var config = &Config{
 }
 
 type Config struct {
-	DevMode  bool
-	Silent   bool
-	LogLevel LogLevel
-	Logger   *log.Logger
+	DevMode      bool
+	Silent       bool
+	CacheTimeOut time.Duration
+	LogLevel     LogLevel
+	Logger       *log.Logger
 }
 
 func SetConfig(c *Config) {

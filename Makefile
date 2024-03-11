@@ -1,4 +1,4 @@
-.PHONY: templ
+.PHONY: templ example
 
 make:
 	go run .

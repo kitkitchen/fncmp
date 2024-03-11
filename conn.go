@@ -73,7 +73,15 @@ func (c *conn) close() error {
 	if c == nil {
 		return errors.New("cannot close nil connection")
 	}
-	sm.delete(c.ID)
+	go func() {
+		// After CacheTimeOut, delete cache if connection is not re-established
+		time.Sleep(config.CacheTimeOut)
+		_, ok := connPool.Get(c.ID)
+		if !ok {
+			sm.delete(c.ID)
+		}
+	}()
+
 	evtListeners.Delete(c)
 	connPool.Delete(c.ID)
 	c.websocket.Close()
