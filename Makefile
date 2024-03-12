@@ -3,6 +3,12 @@
 make:
 	go run .
 
+test:
+	go test ./... -v
+coverage:
+	go test ./... -v -coverprofile=cover.out
+	go tool cover -html=coverage.out
+
 assets: templ
 	tsc -p "static/assets/"
 	./es-build
@@ -25,7 +31,7 @@ sass:
 	sass --watch static/assets/sass:static/assets/stylesheets
 
 publish:
-	git tag -s v0.3.3 -m "fncmp v0.3.3" && \
+	git tag -s v0.3.301 -m "fncmp v0.3.301" && \
 	git push --tags && \
-	GOPROXY=proxy.golang.org go list -m github.com/kitkitchen/fncmp@v0.3.3 && \
-	curl https://sum.golang.org/lookup/github.com/kitkitchen/fncmp@v0.3.3
+	GOPROXY=proxy.golang.org go list -m github.com/kitkitchen/fncmp@v0.3.301 && \
+	curl https://sum.golang.org/lookup/github.com/kitkitchen/fncmp@v0.3.301

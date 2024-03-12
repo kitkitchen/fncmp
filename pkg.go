@@ -33,7 +33,7 @@ const (
 
 func init() {
 	config = &Config{
-		CacheTimeOut: 30 * time.Minute,
+		CacheTimeOut: time.Minute * 30,
 		LogLevel:     Error,
 		Logger:       log.NewWithOptions(os.Stderr, logOpts),
 	}
