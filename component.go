@@ -2,6 +2,7 @@ package fncmp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -240,6 +241,9 @@ func (f FnComponent) Dispatch() {
 
 // FnErr returns a FnComponent with an error message
 func FnErr(ctx context.Context, err error) FnComponent {
+	if err == nil {
+		err = errors.New("error is nil")
+	}
 	return NewFn(ctx, nil).WithError(err)
 }
 
