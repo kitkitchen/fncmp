@@ -44,6 +44,7 @@ type (
 		ID        string
 		HandlerID string
 		LastPing  time.Time
+		Key       string
 		Messages  chan []byte
 	}
 )

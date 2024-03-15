@@ -264,7 +264,7 @@ func MiddleWareFn(h http.HandlerFunc, hf HandleFn) http.HandlerFunc {
 						break
 					}
 					handler.Ping(d)
-					time.Sleep(10 * time.Second)
+					time.Sleep(5 * time.Second)
 				}
 			}(*pinger)
 

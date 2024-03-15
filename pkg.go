@@ -57,7 +57,7 @@ func (c *Config) Set() {
 	}
 
 	config = c
-	if c.Silent || c.LogLevel == 0 {
+	if c.Silent || c.LogLevel == None {
 		c.Logger.SetLevel(log.Level(None))
 		return
 	}

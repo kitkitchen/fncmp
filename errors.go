@@ -22,6 +22,7 @@ func (e CacheError) Error() string {
 
 const (
 	ErrCacheNotFound  CacheError = "cache not found"
-	ErrStoreNotFound  CacheError = "cache store not found"
+	ErrStoreNotFound  CacheError = "cache store not found; create cache first"
 	ErrCacheWrongType CacheError = "cache wrong type"
+	ErrCacheExists    CacheError = "cache already exists; delete existing cache first"
 )

@@ -2,6 +2,7 @@ package fncmp
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -39,18 +40,88 @@ func _test_context() context.Context {
 	return context.WithValue(context.Background(), dispatchKey, dd)
 }
 
-func testSetValueUseCache(t *testing.T) {
-	// Test that the cache is created and the value is set
+func TestNewCache(t *testing.T) {
+
+	cases := []struct {
+		name string
+		fn   func(t *testing.T)
+	}{
+		{"testNewCache", testNewCacheCreate},
+		{"testNewCacheErrExists", testNewCacheExists},
+		{"testNewCacheValue", testNewCacheValue},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, c.fn)
+	}
+}
+
+func testNewCacheCreate(t *testing.T) {
+	ctx := _test_context()
+	initial := testStruct{"test", 20}
+	cache, err := NewCache(ctx, "test", initial)
+	if err != nil {
+		t.Error(err)
+	}
+	if cache.Value() != initial {
+		t.Errorf("expected %v, got %v", initial, cache.Value())
+	}
+}
+
+func testNewCacheExists(t *testing.T) {
+	ctx := _test_context()
+	_, err := NewCache(ctx, t.Name(), testStruct{"test", 20})
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = NewCache(ctx, t.Name(), true)
+	if !errors.Is(err, ErrCacheExists) {
+		t.Errorf("expected %v, got %v", ErrCacheWrongType, err)
+	}
+}
+
+func testNewCacheValue(t *testing.T) {
+	ctx := _test_context()
+	initial := testStruct{"test", 20}
+	cache, err := NewCache(ctx, "test", initial)
+	if err != nil {
+		t.Error(err)
+	}
+	if cache.Value() != initial {
+		t.Errorf("expected %v, got %v", initial, cache.Value())
+	}
+}
+
+func TestUseCache(t *testing.T) {
+	cases := []struct {
+		name string
+		fn   func(t *testing.T)
+	}{
+		{"testSetValueUseCache", testUseCacheSetValue},
+		{"testUseCacheDelete", testUseCacheDelete},
+		{"testUseCacheTimeOut", testUseCacheTimeOut},
+		{"testUseCacheOnCacheTimeOut", testUseCacheOnCacheTimeOut},
+		{"testUseCacheOnChange", testUseCacheOnChange},
+		{"testUseCacheErr", testUseCacheErr},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, c.fn)
+	}
+}
+
+func testUseCacheSetValue(t *testing.T) {
+	_, err := NewCache(_test_context(), t.Name(), true)
+	if err != nil {
+		t.Error(err)
+	}
 	cache, err := UseCache[bool](_test_context(), t.Name())
 	if err != nil {
 		t.Error(err)
 	}
-	if cache.Value() {
-		t.Error("expected false, got true")
-	}
-	cache.Set(true)
 	if !cache.Value() {
-		t.Error("expected true, got false")
+		t.Error("expected false, got true")
 	}
 }
 
@@ -65,6 +136,10 @@ func testUseCacheTimeOut(t *testing.T) {
 		{true, time.Microsecond * 50},
 	}
 
+	_, err := NewCache(_test_context(), t.Name(), false)
+	if err != nil {
+		t.Error(err)
+	}
 	cache, err := UseCache[bool](_test_context(), t.Name())
 	if err != nil {
 		t.Error(err)
@@ -80,6 +155,10 @@ func testUseCacheTimeOut(t *testing.T) {
 }
 
 func testUseCacheDelete(t *testing.T) {
+	_, err := NewCache(_test_context(), t.Name(), true)
+	if err != nil {
+		t.Error(err)
+	}
 	cache, err := UseCache[bool](_test_context(), t.Name())
 	if err != nil {
 		t.Error(err)
@@ -95,26 +174,32 @@ func testUseCacheDelete(t *testing.T) {
 }
 
 func testUseCacheOnCacheTimeOut(t *testing.T) {
+	_, err := NewCache(_test_context(), t.Name(), true)
+	if err != nil {
+		t.Error(err)
+	}
 	cache, err := UseCache[bool](_test_context(), t.Name())
 	if err != nil {
 		t.Error(err)
 	}
+	flag := false
 	OnCacheTimeOut(cache, func() {
-		// do something
+		flag = true
 	})
 
 	timeOut := time.Microsecond * 20
-	cache.Set(true, timeOut)
-	if !cache.Value() {
-		t.Error("expected true, got false")
-	}
+	cache.Set(false, timeOut)
 	time.Sleep(timeOut * 5)
-	if cache.Value() {
-		t.Error("expected false, got true")
+	if !flag {
+		t.Error("expected flag to be set to true")
 	}
 }
 
 func testUseCacheOnChange(t *testing.T) {
+	_, err := NewCache(_test_context(), t.Name(), true)
+	if err != nil {
+		t.Error(err)
+	}
 	cache, err := UseCache[bool](_test_context(), t.Name())
 	if err != nil {
 		t.Error(err)
@@ -134,20 +219,11 @@ func testUseCacheOnChange(t *testing.T) {
 	}
 }
 
-func TestUseCache(t *testing.T) {
-	cases := []struct {
-		name string
-		fn   func(t *testing.T)
-	}{
-		{"testSetValueUseCache", testSetValueUseCache},
-		{"testUseCacheDelete", testUseCacheDelete},
-		{"testUseCacheTimeOut", testUseCacheTimeOut},
-		{"testUseCacheOnCacheTimeOut", testUseCacheOnCacheTimeOut},
-		{"testUseCacheOnChange", testUseCacheOnChange},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, c.fn)
+func testUseCacheErr(t *testing.T) {
+	ctx := _test_context()
+	_, err := UseCache[bool](ctx, "test")
+	if !errors.Is(err, ErrCacheNotFound) {
+		t.Errorf("expected %v, got %v", ErrCacheNotFound, err)
 	}
 }
 
@@ -167,27 +243,14 @@ func BenchmarkUseCache(b *testing.B) {
 		{"false", false},
 	}
 
+	_, err := NewCache(ctx, testCache, false)
+	if err != nil {
+		b.Error(err)
+		b.Fail()
+	}
+
 	for _, c := range cases {
 		cache, _ := UseCache[bool](ctx, testCache)
-		b.Run(c.name, func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				cache.Set(c.value)
-				_ = cache.Value()
-			}
-		})
-	}
-
-	cases2 := []struct {
-		name  string
-		value testStruct
-	}{
-		{"struct", testStruct{"test", 20}},
-		{"struct2", testStruct{"test2", 30}},
-		{"struct3", testStruct{"test3", 40}},
-	}
-
-	for _, c := range cases2 {
-		cache, _ := UseCache[testStruct](ctx, testCache)
 		b.Run(c.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				cache.Set(c.value)
